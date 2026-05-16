@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("smbURL")    private var smbURL     = "smb://192.168.0.249/shdd"
     @AppStorage("destSubdir") private var destSubdir = "new-torrents"
     @AppStorage("pattern")   private var pattern    = "*.torrent"
+    @AppStorage("allowedSSIDs") private var allowedSSIDs = ""
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     @State private var statusMessage = ""
@@ -27,6 +28,18 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                 TextField("Destination subfolder", text: $destSubdir)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            Section("Network gate") {
+                HStack {
+                    TextField("Allowed Wi-Fi SSIDs (comma-separated, empty = any)",
+                              text: $allowedSSIDs)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Add current") { addCurrentSSID() }
+                }
+                Text("If non-empty, the script only runs when connected to one of these Wi-Fis. Off-network ticks exit cleanly and retry on the next tick — the daily lock is only taken on success.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Automation") {
@@ -70,9 +83,28 @@ struct SettingsView: View {
     private func saveConfig() {
         Config.writeConfig(
             sourceDir: sourceDir, smbURL: smbURL,
-            destSubdir: destSubdir, pattern: pattern
+            destSubdir: destSubdir, pattern: pattern,
+            allowedSSIDs: allowedSSIDs
         )
         statusMessage = "Saved to \(Config.configFile)"
+    }
+
+    private func addCurrentSSID() {
+        guard let ssid = Config.currentSSID(), !ssid.isEmpty else {
+            statusMessage = "Not connected to Wi-Fi."
+            return
+        }
+        let existing = allowedSSIDs
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        if existing.contains(ssid) {
+            statusMessage = "'\(ssid)' already in list."
+            return
+        }
+        let combined = existing + [ssid]
+        allowedSSIDs = combined.joined(separator: ", ")
+        statusMessage = "Added '\(ssid)'. Click Save."
     }
 
     private func runDebug() {

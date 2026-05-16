@@ -57,7 +57,22 @@ SOURCE_DIR='/Users/you/Downloads'
 SMB_URL='smb://192.168.0.249/shdd'
 DEST_SUBDIR='new-torrents'
 PATTERN='*.torrent'
+ALLOWED_SSIDS=''   # comma-separated whitelist; empty = any network
 ```
+
+## Network gate & error recovery
+
+The SMB host may only be reachable from specific networks. To avoid noisy
+failures when away:
+
+- **Allowed Wi-Fi SSIDs**: if set, the script exits cleanly (no error) when
+  on any other Wi-Fi. Leave empty once a VPN provides reachability from
+  anywhere.
+- **Soft mount failures**: if the SMB mount fails (off-network, VPN down),
+  the script exits 0 without taking the daily lock. The next launchd tick
+  (every 15 min) retries automatically.
+- The daily lock is only taken on success (or when there was nothing to do
+  *while on an allowed network*).
 
 ## Layout
 

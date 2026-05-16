@@ -16,6 +16,9 @@ SOURCE_DIR="/Users/hanak/Downloads"
 SMB_URL="smb://192.168.0.249/shdd"
 DEST_SUBDIR="new-torrents"
 PATTERN="*.torrent"
+# Comma-separated list of Wi-Fi SSIDs the script is allowed to run on.
+# Empty = run on any network (useful once a VPN provides reachability).
+ALLOWED_SSIDS=""
 
 CONFIG_FILE="${HOME}/.config/fast_t_mover/config"
 if [[ -f "${CONFIG_FILE}" ]]; then
@@ -63,6 +66,43 @@ fi
 
 log "=== Run start (debug=${DEBUG}) ==="
 log "source=${SOURCE_DIR} smb=${SMB_URL} dest=${DEST_SUBDIR} pattern=${PATTERN}"
+
+# --- Wi-Fi gate ------------------------------------------------------------
+# Skip silently (without taking the daily lock) when not on an allowed
+# network. Next launchd tick will retry. Empty list = no gate.
+get_current_ssid() {
+    local iface line
+    iface=$(networksetup -listallhardwareports 2>/dev/null \
+        | awk '/Hardware Port: Wi-Fi/{getline; print $2}')
+    [[ -z "${iface}" ]] && return 1
+    line=$(networksetup -getairportnetwork "${iface}" 2>/dev/null) || return 1
+    if [[ "${line}" == *"Current Wi-Fi Network: "* ]]; then
+        echo "${line#*Current Wi-Fi Network: }"
+        return 0
+    fi
+    return 1
+}
+
+if [[ -n "${ALLOWED_SSIDS}" ]]; then
+    current_ssid="$(get_current_ssid || true)"
+    if [[ -z "${current_ssid}" ]]; then
+        log "Not connected to Wi-Fi (allowed: ${ALLOWED_SSIDS}). Skipping, will retry."
+        exit 0
+    fi
+    matched=0
+    IFS=',' read -ra _allowed <<< "${ALLOWED_SSIDS}"
+    for s in "${_allowed[@]}"; do
+        # trim surrounding whitespace
+        s="${s#"${s%%[![:space:]]*}"}"
+        s="${s%"${s##*[![:space:]]}"}"
+        [[ "${current_ssid}" == "${s}" ]] && { matched=1; break; }
+    done
+    if [[ ${matched} -eq 0 ]]; then
+        log "Wi-Fi '${current_ssid}' not in allowed list (${ALLOWED_SSIDS}). Skipping, will retry."
+        exit 0
+    fi
+    log "Wi-Fi '${current_ssid}' allowed."
+fi
 
 # --- Source check ----------------------------------------------------------
 if [[ ! -d "${SOURCE_DIR}" ]]; then
@@ -112,7 +152,10 @@ mount_share() {
 }
 
 if ! mount_share; then
-    die "Failed to mount ${SMB_URL}. Check Keychain credentials & network."
+    # Soft-fail: most likely off-network or VPN not up. Don't set the daily
+    # lock — next launchd tick will retry.
+    log "Could not mount ${SMB_URL} (off-network / VPN down?). Will retry on next tick."
+    exit 0
 fi
 
 # --- Ensure destination ----------------------------------------------------

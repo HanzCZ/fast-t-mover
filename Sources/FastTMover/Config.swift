@@ -10,7 +10,8 @@ enum Config {
         sourceDir: String,
         smbURL: String,
         destSubdir: String,
-        pattern: String
+        pattern: String,
+        allowedSSIDs: String
     ) {
         try? FileManager.default.createDirectory(
             atPath: configDir, withIntermediateDirectories: true
@@ -21,8 +22,50 @@ enum Config {
         SMB_URL=\(shellQuote(smbURL))
         DEST_SUBDIR=\(shellQuote(destSubdir))
         PATTERN=\(shellQuote(pattern))
+        ALLOWED_SSIDS=\(shellQuote(allowedSSIDs))
         """
         try? body.write(toFile: configFile, atomically: true, encoding: .utf8)
+    }
+
+    /// Return the current Wi-Fi SSID, or nil if not on Wi-Fi.
+    static func currentSSID() -> String? {
+        guard let iface = currentWiFiInterface() else { return nil }
+        let task = Process()
+        task.launchPath = "/usr/sbin/networksetup"
+        task.arguments = ["-getairportnetwork", iface]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+        do { try task.run() } catch { return nil }
+        task.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(),
+                         encoding: .utf8) ?? ""
+        guard let range = out.range(of: "Current Wi-Fi Network: ") else { return nil }
+        return out[range.upperBound...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func currentWiFiInterface() -> String? {
+        let task = Process()
+        task.launchPath = "/usr/sbin/networksetup"
+        task.arguments = ["-listallhardwareports"]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        do { try task.run() } catch { return nil }
+        task.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(),
+                         encoding: .utf8) ?? ""
+        let lines = out.components(separatedBy: "\n")
+        for (i, line) in lines.enumerated() {
+            if line.contains("Hardware Port: Wi-Fi"), i + 1 < lines.count {
+                let dev = lines[i + 1]
+                if let r = dev.range(of: "Device: ") {
+                    return String(dev[r.upperBound...])
+                        .trimmingCharacters(in: .whitespaces)
+                }
+            }
+        }
+        return nil
     }
 
     private static func shellQuote(_ s: String) -> String {
