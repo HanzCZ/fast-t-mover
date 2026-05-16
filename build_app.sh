@@ -1,0 +1,40 @@
+#!/bin/bash
+# Build FastTMover.app from the SwiftPM target.
+# Output: ./dist/FastTMover.app
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+APP_NAME="FastTMover"
+BUNDLE_ID="com.hanak.fasttmover"
+DIST_DIR="dist"
+APP_DIR="${DIST_DIR}/${APP_NAME}.app"
+
+echo "==> swift build (release)"
+swift build -c release
+
+BIN_PATH="$(swift build -c release --show-bin-path)/${APP_NAME}"
+if [[ ! -x "${BIN_PATH}" ]]; then
+    echo "Build did not produce ${BIN_PATH}" >&2
+    exit 1
+fi
+
+echo "==> assembling ${APP_DIR}"
+rm -rf "${APP_DIR}"
+mkdir -p "${APP_DIR}/Contents/MacOS"
+mkdir -p "${APP_DIR}/Contents/Resources"
+
+cp "${BIN_PATH}"             "${APP_DIR}/Contents/MacOS/${APP_NAME}"
+cp "Info.plist"              "${APP_DIR}/Contents/Info.plist"
+cp "move_torrents.sh"        "${APP_DIR}/Contents/Resources/move_torrents.sh"
+chmod +x "${APP_DIR}/Contents/Resources/move_torrents.sh"
+chmod +x "${APP_DIR}/Contents/MacOS/${APP_NAME}"
+
+# Ad-hoc sign so macOS lets it run without quarantine pain on first launch.
+codesign --force --deep --sign - "${APP_DIR}" >/dev/null 2>&1 || \
+    echo "(codesign ad-hoc failed; app will still launch but may prompt)"
+
+echo
+echo "Built: ${APP_DIR}"
+echo "Install:  cp -R ${APP_DIR} /Applications/"
+echo "Run dev:  open ${APP_DIR}"

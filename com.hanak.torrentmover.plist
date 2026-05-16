@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.hanak.torrentmover</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hanak/Documents/fast_t_mover/move_torrents.sh</string>
+    </array>
+
+    <!-- Run shortly after login/load (catches the first wake of the day). -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Poll every 15 minutes. While the Mac sleeps launchd is paused;
+         on wake the missed tick fires almost immediately. The script's
+         once-per-day lock ensures it only actually does work once. -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/hanak/.local/state/fast_t_mover/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hanak/.local/state/fast_t_mover/launchd.err.log</string>
+</dict>
+</plist>
