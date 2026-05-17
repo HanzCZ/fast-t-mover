@@ -2,49 +2,90 @@
 
 Small macOS menu-bar app that moves files matching a glob (default `*.torrent`)
 from a local source folder to an SMB share. Designed to run quietly in the
-background and effectively trigger once per day after wake.
+background and trigger once per configurable interval (default: once a day)
+on the first allowed-Wi-Fi tick after wake.
 
 ## What it does
 
-1. On a schedule (≈ on wake, max 1×/day) or on-demand, scans a source folder.
-2. Mounts an SMB share via AppleScript (uses macOS Keychain for credentials).
-3. Moves matched files into a destination subfolder on the share.
-4. Logs everything to `~/.local/state/fast_t_mover/torrent_mover.log`.
+1. On a schedule (LaunchAgent ticks every 15 min) or on-demand, scans a source folder.
+2. Optional Wi-Fi gate: only run when connected to a whitelisted SSID.
+3. Mounts an SMB share via AppleScript (uses macOS Keychain for credentials).
+4. Moves matched files into a destination subfolder on the share.
+5. Posts a native macOS notification (green ✓ / red ✗ / blue ⓘ depending on outcome).
+6. Logs everything to `~/.local/state/fast_t_mover/torrent_mover.log`.
 
-A once-per-day lockfile (`~/.local/state/fast_t_mover/last_run_date`) ensures
-the work only happens once daily even though the LaunchAgent ticks more often.
+A timestamp lockfile (`~/.local/state/fast_t_mover/last_run_ts`) gates work to
+the configured minimum interval; off-network ticks and mount failures exit
+cleanly without taking the lock so the next tick retries.
 
 ## Install
 
-### Build from source
+### Prereqs
 
-Requires macOS 13+ and Swift 5.7+ (CommandLineTools is enough).
+- macOS 13 or newer
+- Xcode Command Line Tools — `xcode-select --install` if missing
+- (Optional) `gh` CLI authenticated, or just `git clone` over HTTPS
+
+### Fresh install
 
 ```bash
+git clone https://github.com/HanzCZ/fast-t-mover.git
+cd fast-t-mover
 ./build_app.sh
 cp -R dist/FastTMover.app /Applications/
 open /Applications/FastTMover.app
 ```
 
-A tray icon (`tray.and.arrow.up`) appears in the menu bar.
+You should see **FTM** + a disk icon in the menu bar.
 
-### One-time SMB setup
+### Update (re-install over an existing copy)
 
-1. In Finder press `⌘K`, enter your SMB URL (e.g. `smb://192.168.0.249/shdd`).
-2. Authenticate and tick **Remember this password in my keychain**.
+The app keeps a status item and watches a queue file, so an old copy holds the
+binary open. Always kill the running app before overwriting.
 
-The app's `mount volume` call will then succeed silently.
+```bash
+cd fast-t-mover
+git pull
+osascript -e 'tell application "FastTMover" to quit' 2>/dev/null
+sleep 1
+./build_app.sh
+rm -rf /Applications/FastTMover.app
+cp -R dist/FastTMover.app /Applications/
+open /Applications/FastTMover.app
+```
+
+If the menu bar icon doesn't change after update, force-refresh:
+
+```bash
+killall Dock Finder NotificationCenter usernoted 2>/dev/null
+```
+
+### First-run setup
+
+1. **SMB credentials** — in Finder press `⌘K`, enter your SMB URL (e.g.
+   `smb://192.168.0.249/shdd`), authenticate, tick **Remember this password
+   in my keychain**. The app's `mount volume` call then succeeds silently.
+2. **Notification permission** — macOS will prompt the first time the app
+   tries to post. Click **Allow**. If you missed it: System Settings →
+   Notifications → **FastTMover** → Allow Notifications + Banner style.
+3. **Settings** — open **FTM → Settings…**:
+   - Source folder
+   - SMB URL + destination subfolder
+   - File pattern (default `*.torrent`)
+   - Allowed Wi-Fi SSIDs (comma-separated; empty = any network)
+   - Minimum interval (Once a day / 12h / 4h / 1h / Every wake)
+   - Toggle **Run automatically (≈ on wake)** — installs the LaunchAgent
 
 ## Use
 
-Click the menu bar icon:
+Click the menu bar item:
 
-- **Run Now** — execute once with the daily lock.
-- **Run Now (debug)** — bypass the lock, verbose, also matches files with the
-  pattern body anywhere in the name (for testing with renamed files).
+- **Run Now** — execute once, honouring the configured interval.
+- **Run Now (debug)** — bypass the interval lock, verbose, also matches files
+  with the pattern body anywhere in the name (for testing with renamed files).
+- **Test Notification** — post a sample success banner to verify permissions.
 - **Auto-run on wake** — install/remove the LaunchAgent.
-- **Settings…** — configure source folder, SMB URL, destination subfolder,
-  file pattern.
+- **Settings…** — full configuration window.
 - **Show Log** — open the log file.
 
 ## Config
@@ -57,7 +98,8 @@ SOURCE_DIR='/Users/you/Downloads'
 SMB_URL='smb://192.168.0.249/shdd'
 DEST_SUBDIR='new-torrents'
 PATTERN='*.torrent'
-ALLOWED_SSIDS=''   # comma-separated whitelist; empty = any network
+ALLOWED_SSIDS=''     # comma-separated whitelist; empty = any network
+INTERVAL_HOURS=24    # 0 = every tick, 24 = once a day
 ```
 
 ## Network gate & error recovery
@@ -69,23 +111,26 @@ failures when away:
   on any other Wi-Fi. Leave empty once a VPN provides reachability from
   anywhere.
 - **Soft mount failures**: if the SMB mount fails (off-network, VPN down),
-  the script exits 0 without taking the daily lock. The next launchd tick
+  the script exits 0 without taking the lock. The next launchd tick
   (every 15 min) retries automatically.
-- The daily lock is only taken on success (or when there was nothing to do
+- The lock is only taken on success (or when there was nothing to do
   *while on an allowed network*).
 
 ## Layout
 
 ```
 Sources/FastTMover/
-    App.swift            Menu bar entry + menu items
-    SettingsView.swift   Settings window
-    Config.swift         Writes the config file
-    Runner.swift         Spawns the worker script
-    LaunchAgent.swift    Install/uninstall the LaunchAgent
-move_torrents.sh         The worker (bash) — usable standalone too
-Info.plist               App bundle metadata (LSUIElement)
-build_app.sh             swift build + .app assembly + ad-hoc codesign
+    App.swift                  Menu bar entry + menu items
+    SettingsView.swift         SwiftUI settings form
+    SettingsWindow.swift       NSWindowController hosting the settings view
+    Config.swift               Writes the config file + SSID helpers
+    Runner.swift               Spawns the worker script
+    LaunchAgent.swift          Install/uninstall the LaunchAgent
+    NotificationManager.swift  UNUserNotificationCenter + queue file watcher
+move_torrents.sh               The worker (bash) — usable standalone too
+tools/generate_icon.swift      Generates the 1024x1024 app icon master PNG
+Info.plist                     App bundle metadata (LSUIElement)
+build_app.sh                   swift build + .app assembly + icon + ad-hoc codesign
 ```
 
 ## Standalone (no app)
@@ -97,14 +142,17 @@ The script works on its own:
 ```
 
 It reads the same config file the app writes, falling back to built-in
-defaults if absent.
+defaults if absent. Notifications posted via the queue file are picked up
+the next time the menu-bar app launches; without the app, an `osascript`
+fallback is attempted.
 
 ## Uninstall
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.hanak.torrentmover.plist
-rm ~/Library/LaunchAgents/com.hanak.torrentmover.plist
+osascript -e 'tell application "FastTMover" to quit' 2>/dev/null
+launchctl unload ~/Library/LaunchAgents/com.hanak.torrentmover.plist 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.hanak.torrentmover.plist
 rm -rf /Applications/FastTMover.app
 rm -rf ~/.config/fast_t_mover ~/.local/state/fast_t_mover
-defaults delete com.hanak.fasttmover
+defaults delete com.hanak.fasttmover 2>/dev/null
 ```
