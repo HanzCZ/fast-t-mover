@@ -18,6 +18,15 @@ struct SettingsView: View {
     @State private var verifying = false
 
     var body: some View {
+        VStack(spacing: 0) {
+            form
+            Divider()
+            footer
+        }
+        .frame(width: 560)
+    }
+
+    private var form: some View {
         Form {
             Section("Source") {
                 HStack {
@@ -80,40 +89,43 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section {
-                HStack {
-                    Button("Save") { saveConfig() }
-                        .keyboardShortcut(.defaultAction)
-                    Button("Verify Access") { runVerify() }
-                        .disabled(verifying)
-                    Button("Run Now (debug)") { runDebug() }
-                    Spacer()
-                }
-                if !statusMessage.isEmpty {
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if !verifyLines.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(Array(verifyLines.enumerated()), id: \.offset) { _, line in
-                                Text(line)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 160)
-                    .padding(8)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .cornerRadius(6)
-                }
-            }
         }
         .padding(20)
-        .frame(width: 520)
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button("Save") { saveConfig() }
+                    .keyboardShortcut(.defaultAction)
+                Button("Verify Access") { runVerify() }
+                    .disabled(verifying)
+                Button("Run Now (debug)") { runDebug() }
+                Spacer()
+            }
+            if !statusMessage.isEmpty {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !verifyLines.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(verifyLines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                }
+                .frame(maxHeight: 160)
+                .background(Color(NSColor.textBackgroundColor))
+                .cornerRadius(6)
+            }
+        }
+        .padding(16)
     }
 
     private func pickFolder() {
