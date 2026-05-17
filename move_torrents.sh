@@ -19,6 +19,9 @@ PATTERN="*.torrent"
 # Comma-separated list of Wi-Fi SSIDs the script is allowed to run on.
 # Empty = run on any network (useful once a VPN provides reachability).
 ALLOWED_SSIDS=""
+# Minimum hours between successful runs. 0 = run on every tick.
+# 24 = once daily (default); 1 = hourly, 4 = every 4 hours, etc.
+INTERVAL_HOURS=24
 
 CONFIG_FILE="${HOME}/.config/fast_t_mover/config"
 if [[ -f "${CONFIG_FILE}" ]]; then
@@ -31,7 +34,7 @@ SHARE_NAME="$(echo "${SMB_URL}" | sed -E 's#^smb://[^/]+/##' | sed 's#/.*##')"
 MOUNT_POINT="/Volumes/${SHARE_NAME}"
 
 STATE_DIR="${HOME}/.local/state/fast_t_mover"
-LAST_RUN_FILE="${STATE_DIR}/last_run_date"
+LAST_RUN_FILE="${STATE_DIR}/last_run_ts"
 LOG_FILE="${STATE_DIR}/torrent_mover.log"
 
 DEBUG=0
@@ -54,12 +57,38 @@ die() {
     exit 1
 }
 
-# --- Once-per-day gate -----------------------------------------------------
-TODAY="$(date '+%Y-%m-%d')"
-if [[ ${DEBUG} -eq 0 && -f "${LAST_RUN_FILE}" ]]; then
-    LAST_RUN="$(cat "${LAST_RUN_FILE}" 2>/dev/null || echo '')"
-    if [[ "${LAST_RUN}" == "${TODAY}" ]]; then
-        log "Already ran today (${TODAY}), exiting."
+# macOS notification banner. Writes a line to a queue file that the
+# FastTMover menu-bar app watches and turns into a UNUserNotification
+# (with an icon attachment matching `kind`).
+# Falls back to osascript if the app isn't running (best effort).
+# Usage: notify <kind> <title> <message>
+#   kind = success | failure | info
+notify() {
+    local kind="${1:-info}"
+    local title="${2:-FastTMover}"
+    local msg="$3"
+    # Sanitize the field separator out of values
+    kind="${kind//|/-}"
+    title="${title//|/-}"
+    msg="${msg//|/-}"
+    local queue="${STATE_DIR}/notify.queue"
+    printf '%s|%s|%s\n' "${kind}" "${title}" "${msg}" >> "${queue}"
+    if ! pgrep -q FastTMover; then
+        FTM_TITLE="${title}" FTM_MSG="${msg}" osascript -e '
+            display notification (system attribute "FTM_MSG") with title (system attribute "FTM_TITLE")
+        ' >/dev/null 2>&1 || true
+    fi
+}
+
+# --- Interval gate ---------------------------------------------------------
+NOW_TS="$(date +%s)"
+if [[ ${DEBUG} -eq 0 && ${INTERVAL_HOURS} -gt 0 && -f "${LAST_RUN_FILE}" ]]; then
+    LAST_TS="$(cat "${LAST_RUN_FILE}" 2>/dev/null || echo '0')"
+    [[ "${LAST_TS}" =~ ^[0-9]+$ ]] || LAST_TS=0
+    elapsed=$(( NOW_TS - LAST_TS ))
+    min_interval=$(( INTERVAL_HOURS * 3600 ))
+    if (( elapsed < min_interval )); then
+        log "Ran $((elapsed / 60))m ago; min interval ${INTERVAL_HOURS}h. Exiting."
         exit 0
     fi
 fi
@@ -125,7 +154,8 @@ done < <(find "${SOURCE_DIR}" -maxdepth 1 -type f -name "${find_pattern}" -print
 
 if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
-    echo "${TODAY}" > "${LAST_RUN_FILE}"
+    notify "info" "FastTMover" "No ${PATTERN} files in $(basename "${SOURCE_DIR}")."
+    echo "${NOW_TS}" > "${LAST_RUN_FILE}"
     exit 0
 fi
 
@@ -187,6 +217,13 @@ for src in "${found_files[@]}"; do
 done
 
 log "Done. moved=${moved} failed=${failed}"
-echo "${TODAY}" > "${LAST_RUN_FILE}"
+if [[ ${failed} -gt 0 && ${moved} -gt 0 ]]; then
+    notify "failure" "FastTMover" "Moved ${moved}, failed ${failed}. See log."
+elif [[ ${failed} -gt 0 ]]; then
+    notify "failure" "FastTMover" "Failed to move ${failed} file(s). See log."
+else
+    notify "success" "FastTMover" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
+fi
+echo "${NOW_TS}" > "${LAST_RUN_FILE}"
 
 exit 0

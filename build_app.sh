@@ -30,6 +30,25 @@ cp "move_torrents.sh"        "${APP_DIR}/Contents/Resources/move_torrents.sh"
 chmod +x "${APP_DIR}/Contents/Resources/move_torrents.sh"
 chmod +x "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
+# --- Icon ----------------------------------------------------------------
+ICON_MASTER="${DIST_DIR}/AppIcon_1024.png"
+ICONSET="${DIST_DIR}/AppIcon.iconset"
+ICNS_OUT="${APP_DIR}/Contents/Resources/AppIcon.icns"
+
+echo "==> generating app icon"
+swift tools/generate_icon.swift "${ICON_MASTER}" >/dev/null
+rm -rf "${ICONSET}"
+mkdir -p "${ICONSET}"
+for sz in 16 32 128 256 512; do
+    sips -z $sz $sz                    "${ICON_MASTER}" \
+        --out "${ICONSET}/icon_${sz}x${sz}.png" >/dev/null
+    twox=$((sz * 2))
+    sips -z $twox $twox                "${ICON_MASTER}" \
+        --out "${ICONSET}/icon_${sz}x${sz}@2x.png" >/dev/null
+done
+iconutil -c icns "${ICONSET}" -o "${ICNS_OUT}"
+echo "icon -> ${ICNS_OUT}"
+
 # Ad-hoc sign so macOS lets it run without quarantine pain on first launch.
 codesign --force --deep --sign - "${APP_DIR}" >/dev/null 2>&1 || \
     echo "(codesign ad-hoc failed; app will still launch but may prompt)"

@@ -11,7 +11,8 @@ enum Config {
         smbURL: String,
         destSubdir: String,
         pattern: String,
-        allowedSSIDs: String
+        allowedSSIDs: String,
+        intervalHours: Int
     ) {
         try? FileManager.default.createDirectory(
             atPath: configDir, withIntermediateDirectories: true
@@ -23,6 +24,7 @@ enum Config {
         DEST_SUBDIR=\(shellQuote(destSubdir))
         PATTERN=\(shellQuote(pattern))
         ALLOWED_SSIDS=\(shellQuote(allowedSSIDs))
+        INTERVAL_HOURS=\(intervalHours)
         """
         try? body.write(toFile: configFile, atomically: true, encoding: .utf8)
     }
