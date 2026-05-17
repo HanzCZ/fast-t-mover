@@ -26,35 +26,26 @@ cleanly without taking the lock so the next tick retries.
 - Xcode Command Line Tools — `xcode-select --install` if missing
 - (Optional) `gh` CLI authenticated, or just `git clone` over HTTPS
 
-### Fresh install
+### Install or reinstall (one command)
+
+The same command works for the first install and for every update. It quits
+any running copy, rebuilds, replaces `/Applications/FastTMover.app`, and
+relaunches.
 
 ```bash
+# first time:
 git clone https://github.com/HanzCZ/fast-t-mover.git
 cd fast-t-mover
-./build_app.sh
-cp -R dist/FastTMover.app /Applications/
-open /Applications/FastTMover.app
-```
 
-You should see **FTM** + a disk icon in the menu bar.
-
-### Update (re-install over an existing copy)
-
-The app keeps a status item and watches a queue file, so an old copy holds the
-binary open. Always kill the running app before overwriting.
-
-```bash
-cd fast-t-mover
+# every time (including updates):
 git pull
-osascript -e 'tell application "FastTMover" to quit' 2>/dev/null
-sleep 1
-./build_app.sh
-rm -rf /Applications/FastTMover.app
-cp -R dist/FastTMover.app /Applications/
-open /Applications/FastTMover.app
+./install_app.sh
 ```
 
-If the menu bar icon doesn't change after update, force-refresh:
+You should see **FTM** + a disk icon in the menu bar within a second.
+
+If the icon in Finder/Notification banner looks stale after an update, force a
+cache refresh:
 
 ```bash
 killall Dock Finder NotificationCenter usernoted 2>/dev/null
