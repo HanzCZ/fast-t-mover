@@ -3,6 +3,11 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Apply persisted Dock visibility preference. Info.plist sets
+        // LSUIElement=true (accessory) as the default; switching to .regular
+        // here makes the icon appear if the user opted in.
+        let showInDock = UserDefaults.standard.bool(forKey: "showInDock")
+        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         NotificationManager.shared.setup()
     }
 }

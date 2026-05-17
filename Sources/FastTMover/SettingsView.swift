@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("intervalHours") private var intervalHours: Int = 24
     @AppStorage("maxAgeDays") private var maxAgeDays: Int = 0
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
+    @AppStorage("showInDock") private var showInDock = false
 
     @State private var statusMessage = ""
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -47,6 +48,14 @@ struct SettingsView: View {
                     Button("Add current") { addCurrentSSID() }
                 }
                 Text("If non-empty, the script only runs when connected to one of these Wi-Fis. Off-network ticks exit cleanly and retry on the next tick — the daily lock is only taken on success.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Appearance") {
+                Toggle("Show in Dock", isOn: $showInDock)
+                    .onChange(of: showInDock, perform: applyShowInDock)
+                Text("When off, the app lives only in the menu bar. Turn on if the menu bar item is hard to find (e.g. hidden by the notch).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -131,6 +140,16 @@ struct SettingsView: View {
         saveConfig()
         let result = Runner.run(debug: true)
         statusMessage = "Exit \(result.status). See Show Log for details."
+    }
+
+    private func applyShowInDock(_ enabled: Bool) {
+        NSApp.setActivationPolicy(enabled ? .regular : .accessory)
+        if enabled {
+            // Bring the settings window back to front — switching policy can
+            // shuffle focus.
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        statusMessage = enabled ? "Dock icon shown." : "Dock icon hidden."
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
