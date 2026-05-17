@@ -39,6 +39,7 @@ MOUNT_POINT="/Volumes/${SHARE_NAME}"
 STATE_DIR="${HOME}/.local/state/fast_t_mover"
 LAST_RUN_FILE="${STATE_DIR}/last_run_ts"
 LOG_FILE="${STATE_DIR}/torrent_mover.log"
+STATS_FILE="${STATE_DIR}/stats"
 
 DEBUG=0
 FORCE=0
@@ -62,6 +63,25 @@ log() {
 die() {
     log "ERROR: $*"
     exit 1
+}
+
+# Update lifetime + last-run statistics for the Settings hero card.
+update_stats() {
+    local moved_count="$1"
+    local failed_count="$2"
+    local prev_total=0
+    if [[ -f "${STATS_FILE}" ]]; then
+        # shellcheck disable=SC1090
+        source "${STATS_FILE}"
+        prev_total="${TOTAL_MOVED:-0}"
+    fi
+    local new_total=$(( prev_total + moved_count ))
+    cat > "${STATS_FILE}" <<EOF
+TOTAL_MOVED=${new_total}
+LAST_RUN_TS=${NOW_TS}
+LAST_RUN_MOVED=${moved_count}
+LAST_RUN_FAILED=${failed_count}
+EOF
 }
 
 # macOS notification banner. Writes a line to a queue file that the
@@ -172,6 +192,7 @@ if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
     notify "info" "FastTMover" "No ${PATTERN} files in $(basename "${SOURCE_DIR}")."
     echo "${NOW_TS}" > "${LAST_RUN_FILE}"
+    update_stats 0 0
     exit 0
 fi
 
@@ -301,5 +322,6 @@ else
     notify "success" "FastTMover" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
 fi
 echo "${NOW_TS}" > "${LAST_RUN_FILE}"
+update_stats "${moved}" "${failed}"
 
 exit 0
