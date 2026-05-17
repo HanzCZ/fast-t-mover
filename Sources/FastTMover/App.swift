@@ -1,8 +1,15 @@
 import SwiftUI
 import AppKit
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationManager.shared.setup()
+    }
+}
+
 @main
 struct FastTMoverApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     var body: some Scene {
@@ -26,6 +33,12 @@ struct MenuContents: View {
         }
         Button("Run Now (debug)") {
             _ = Runner.run(debug: true)
+        }
+        Button("Test Notification") {
+            NotificationManager.shared.post(
+                title: "FastTMover",
+                body: "Notifications are working."
+            )
         }
         Divider()
         Toggle("Auto-run on wake", isOn: $autoRunEnabled)

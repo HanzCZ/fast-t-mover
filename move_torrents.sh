@@ -54,13 +54,24 @@ die() {
     exit 1
 }
 
-# macOS notification banner. Env-var passing avoids quoting hell.
+# macOS notification banner. Writes a line to a queue file that the
+# FastTMover menu-bar app watches and turns into a UNUserNotification.
+# Falls back to osascript if the app isn't running (best effort).
 notify() {
     local title="${1:-FastTMover}"
     local msg="$2"
-    FTM_TITLE="${title}" FTM_MSG="${msg}" osascript -e '
-        display notification (system attribute "FTM_MSG") with title (system attribute "FTM_TITLE")
-    ' >/dev/null 2>&1 || true
+    # Sanitize the field separator out of values
+    title="${title//|/-}"
+    msg="${msg//|/-}"
+    local queue="${STATE_DIR}/notify.queue"
+    printf '%s|%s\n' "${title}" "${msg}" >> "${queue}"
+    # Best-effort fallback so a Run-Now from terminal without the GUI app
+    # at least logs an attempt — usually suppressed by macOS, see README.
+    if ! pgrep -q FastTMover; then
+        FTM_TITLE="${title}" FTM_MSG="${msg}" osascript -e '
+            display notification (system attribute "FTM_MSG") with title (system attribute "FTM_TITLE")
+        ' >/dev/null 2>&1 || true
+    fi
 }
 
 # --- Once-per-day gate -----------------------------------------------------
