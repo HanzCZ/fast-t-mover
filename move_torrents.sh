@@ -204,12 +204,19 @@ if ! mount_share; then
     exit 0
 fi
 
+# Diagnostic: what is actually mounted at our expected point?
+mount_line="$(mount | grep " on ${MOUNT_POINT} " || true)"
+log "Mount: ${mount_line:-NONE — unexpected!}"
+
 # --- Ensure destination ----------------------------------------------------
 DEST_DIR="${MOUNT_POINT}/${DEST_SUBDIR}"
 if [[ ! -d "${DEST_DIR}" ]]; then
     mkdir -p "${DEST_DIR}" || die "Could not create ${DEST_DIR}"
     log "Created destination ${DEST_DIR}."
 fi
+# Show resolved canonical path so symlinks/automounts don't surprise us.
+resolved_dest="$(cd "${DEST_DIR}" 2>/dev/null && pwd -P || echo "${DEST_DIR}")"
+log "Destination resolved to: ${resolved_dest}"
 
 # --- Move files (safe copy → verify → delete source) ----------------------
 # Never delete the source unless the destination exists and has the same
@@ -226,6 +233,8 @@ for src in "${found_files[@]}"; do
         base="${name%.*}"
         dest="${DEST_DIR}/${base}.${ts}.${ext}"
     fi
+    log "Copying: ${src}"
+    log "     -> ${dest}"
 
     # 1. Copy
     if ! cp -- "${src}" "${dest}" 2>>"${LOG_FILE}"; then
@@ -244,18 +253,30 @@ for src in "${found_files[@]}"; do
         failed=$((failed + 1))
         continue
     fi
+    log "Verified: ${dest} (${dest_size} B)"
 
     # 3. Verified — safe to remove source
     if rm -- "${src}" 2>>"${LOG_FILE}"; then
-        log "Moved: ${name}"
+        log "Moved: ${name} -> ${dest}"
         moved=$((moved + 1))
     else
         # Destination is good; only the local rm failed. Count as success
         # (the goal was getting it onto the share) but warn.
-        log "Moved ${name} but could not delete source (will retry next run)."
+        log "Moved ${name} -> ${dest} but could not delete source (will retry next run)."
         moved=$((moved + 1))
     fi
 done
+
+# Post-run sanity: list the destination directory so the user can see
+# exactly what landed there.
+log "Listing ${DEST_DIR} after run:"
+if listing=$(ls -la "${DEST_DIR}" 2>&1); then
+    while IFS= read -r line; do
+        log "   ${line}"
+    done <<< "${listing}"
+else
+    log "   (could not list — ${listing})"
+fi
 
 log "Done. moved=${moved} failed=${failed}"
 if [[ ${failed} -gt 0 && ${moved} -gt 0 ]]; then
