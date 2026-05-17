@@ -145,6 +145,7 @@ done < <(find "${SOURCE_DIR}" -maxdepth 1 -type f -name "${find_pattern}" -print
 
 if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
+    notify "FastTMover" "No ${PATTERN} files in $(basename "${SOURCE_DIR}")."
     echo "${TODAY}" > "${LAST_RUN_FILE}"
     exit 0
 fi
