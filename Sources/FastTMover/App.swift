@@ -34,10 +34,10 @@ struct MenuContents: View {
 
     var body: some View {
         Button("Run Now") {
-            _ = Runner.run(debug: false)
+            _ = Runner.run(force: true)
         }
         Button("Run Now (debug)") {
-            _ = Runner.run(debug: true)
+            _ = Runner.run(debug: true, force: true)
         }
         Button("Test Notification") {
             NotificationManager.shared.post(

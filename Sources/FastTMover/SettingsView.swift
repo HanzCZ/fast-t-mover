@@ -138,7 +138,7 @@ struct SettingsView: View {
 
     private func runDebug() {
         saveConfig()
-        let result = Runner.run(debug: true)
+        let result = Runner.run(debug: true, force: true)
         statusMessage = "Exit \(result.status). See Show Log for details."
     }
 

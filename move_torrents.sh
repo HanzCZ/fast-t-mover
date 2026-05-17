@@ -41,9 +41,13 @@ LAST_RUN_FILE="${STATE_DIR}/last_run_ts"
 LOG_FILE="${STATE_DIR}/torrent_mover.log"
 
 DEBUG=0
-if [[ "${1:-}" == "--debug" || "${1:-}" == "-d" ]]; then
-    DEBUG=1
-fi
+FORCE=0
+for arg in "$@"; do
+    case "${arg}" in
+        --debug|-d) DEBUG=1 ;;
+        --force|-f) FORCE=1 ;;
+    esac
+done
 
 mkdir -p "${STATE_DIR}"
 
@@ -84,8 +88,9 @@ notify() {
 }
 
 # --- Interval gate ---------------------------------------------------------
+# --debug and --force both bypass this; LaunchAgent runs respect it.
 NOW_TS="$(date +%s)"
-if [[ ${DEBUG} -eq 0 && ${INTERVAL_HOURS} -gt 0 && -f "${LAST_RUN_FILE}" ]]; then
+if [[ ${DEBUG} -eq 0 && ${FORCE} -eq 0 && ${INTERVAL_HOURS} -gt 0 && -f "${LAST_RUN_FILE}" ]]; then
     LAST_TS="$(cat "${LAST_RUN_FILE}" 2>/dev/null || echo '0')"
     [[ "${LAST_TS}" =~ ^[0-9]+$ ]] || LAST_TS=0
     elapsed=$(( NOW_TS - LAST_TS ))
@@ -202,7 +207,10 @@ if [[ ! -d "${DEST_DIR}" ]]; then
     log "Created destination ${DEST_DIR}."
 fi
 
-# --- Move files ------------------------------------------------------------
+# --- Move files (safe copy → verify → delete source) ----------------------
+# Never delete the source unless the destination exists and has the same
+# byte size. SMB's metadata-related mv warnings (xattrs/mode/times) are
+# harmless but cause anxiety in the log; cp avoids them entirely.
 moved=0
 failed=0
 for src in "${found_files[@]}"; do
@@ -214,12 +222,34 @@ for src in "${found_files[@]}"; do
         base="${name%.*}"
         dest="${DEST_DIR}/${base}.${ts}.${ext}"
     fi
-    if mv -- "${src}" "${dest}" 2>>"${LOG_FILE}"; then
+
+    # 1. Copy
+    if ! cp -- "${src}" "${dest}" 2>>"${LOG_FILE}"; then
+        log "FAILED to copy: ${name} — source kept."
+        rm -f -- "${dest}" 2>/dev/null   # remove any partial
+        failed=$((failed + 1))
+        continue
+    fi
+
+    # 2. Verify size
+    src_size=$(stat -f%z -- "${src}" 2>/dev/null || echo "")
+    dest_size=$(stat -f%z -- "${dest}" 2>/dev/null || echo "")
+    if [[ -z "${src_size}" || -z "${dest_size}" || "${src_size}" != "${dest_size}" ]]; then
+        log "Size mismatch for ${name} (src=${src_size} dest=${dest_size}) — source kept, partial dest removed."
+        rm -f -- "${dest}" 2>/dev/null
+        failed=$((failed + 1))
+        continue
+    fi
+
+    # 3. Verified — safe to remove source
+    if rm -- "${src}" 2>>"${LOG_FILE}"; then
         log "Moved: ${name}"
         moved=$((moved + 1))
     else
-        log "FAILED to move: ${name}"
-        failed=$((failed + 1))
+        # Destination is good; only the local rm failed. Count as success
+        # (the goal was getting it onto the share) but warn.
+        log "Moved ${name} but could not delete source (will retry next run)."
+        moved=$((moved + 1))
     fi
 done
 
