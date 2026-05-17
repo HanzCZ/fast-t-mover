@@ -54,6 +54,15 @@ die() {
     exit 1
 }
 
+# macOS notification banner. Env-var passing avoids quoting hell.
+notify() {
+    local title="${1:-FastTMover}"
+    local msg="$2"
+    FTM_TITLE="${title}" FTM_MSG="${msg}" osascript -e '
+        display notification (system attribute "FTM_MSG") with title (system attribute "FTM_TITLE")
+    ' >/dev/null 2>&1 || true
+}
+
 # --- Once-per-day gate -----------------------------------------------------
 TODAY="$(date '+%Y-%m-%d')"
 if [[ ${DEBUG} -eq 0 && -f "${LAST_RUN_FILE}" ]]; then
@@ -187,6 +196,13 @@ for src in "${found_files[@]}"; do
 done
 
 log "Done. moved=${moved} failed=${failed}"
+if [[ ${failed} -gt 0 && ${moved} -gt 0 ]]; then
+    notify "FastTMover" "Moved ${moved}, failed ${failed}. See log."
+elif [[ ${failed} -gt 0 ]]; then
+    notify "FastTMover" "Failed to move ${failed} file(s). See log."
+else
+    notify "FastTMover" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
+fi
 echo "${TODAY}" > "${LAST_RUN_FILE}"
 
 exit 0

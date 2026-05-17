@@ -14,10 +14,6 @@ struct FastTMoverApp: App {
             Label("FTM", systemImage: "externaldrive.fill.badge.plus")
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView()
-        }
     }
 }
 
@@ -42,8 +38,7 @@ struct MenuContents: View {
             }
         Divider()
         Button("Settings…") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            SettingsWindowController.shared.show()
         }
         Button("Show Log") {
             NSWorkspace.shared.open(URL(fileURLWithPath: Config.logFile))
