@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     @State private var statusMessage = ""
+    @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
         Form {
@@ -51,6 +52,8 @@ struct SettingsView: View {
             }
 
             Section("Automation") {
+                Toggle("Launch FastTMover at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin, perform: applyLaunchAtLogin)
                 Toggle("Run automatically (≈ on wake)",
                        isOn: $autoRunEnabled)
                     .onChange(of: autoRunEnabled, perform: applyAutoRun)
@@ -128,6 +131,17 @@ struct SettingsView: View {
         saveConfig()
         let result = Runner.run(debug: true)
         statusMessage = "Exit \(result.status). See Show Log for details."
+    }
+
+    private func applyLaunchAtLogin(_ enabled: Bool) {
+        if let err = LoginItem.setEnabled(enabled) {
+            statusMessage = "Login item: \(err)"
+            launchAtLogin = LoginItem.isEnabled   // revert toggle to truth
+        } else {
+            statusMessage = enabled
+                ? "Will launch at login."
+                : "Will not launch at login."
+        }
     }
 
     private func applyAutoRun(_ enabled: Bool) {
