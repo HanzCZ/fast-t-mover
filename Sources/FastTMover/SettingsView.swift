@@ -14,6 +14,8 @@ struct SettingsView: View {
 
     @State private var statusMessage = ""
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var verifyLines: [String] = []
+    @State private var verifying = false
 
     var body: some View {
         Form {
@@ -82,6 +84,8 @@ struct SettingsView: View {
                 HStack {
                     Button("Save") { saveConfig() }
                         .keyboardShortcut(.defaultAction)
+                    Button("Verify Access") { runVerify() }
+                        .disabled(verifying)
                     Button("Run Now (debug)") { runDebug() }
                     Spacer()
                 }
@@ -89,6 +93,22 @@ struct SettingsView: View {
                     Text(statusMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                if !verifyLines.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(verifyLines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 160)
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
                 }
             }
         }
@@ -134,6 +154,33 @@ struct SettingsView: View {
         let combined = existing + [ssid]
         allowedSSIDs = combined.joined(separator: ", ")
         statusMessage = "Added '\(ssid)'. Click Save."
+    }
+
+    private func runVerify() {
+        saveConfig()
+        verifying = true
+        verifyLines = ["• Running access checks…"]
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = AccessCheck.run(
+                sourceDir: sourceDir,
+                smbURL: smbURL,
+                destSubdir: destSubdir
+            )
+            DispatchQueue.main.async {
+                verifyLines = result.lines
+                verifying = false
+                statusMessage = result.ok
+                    ? "Verify Access: all OK"
+                    : "Verify Access: see results"
+                NotificationManager.shared.post(
+                    title: "FastTMover",
+                    body: result.ok
+                        ? "Access verification passed."
+                        : "Access verification failed — see Settings.",
+                    kind: result.ok ? .success : .failure
+                )
+            }
+        }
     }
 
     private func runDebug() {
