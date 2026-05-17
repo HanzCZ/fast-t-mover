@@ -123,22 +123,26 @@ get_current_ssid() {
 if [[ -n "${ALLOWED_SSIDS}" ]]; then
     current_ssid="$(get_current_ssid || true)"
     if [[ -z "${current_ssid}" ]]; then
-        log "Not connected to Wi-Fi (allowed: ${ALLOWED_SSIDS}). Skipping, will retry."
-        exit 0
+        # macOS 14.4+ may redact SSID from background processes without
+        # Location Services. Don't skip on unknown — let mount succeed or
+        # soft-fail naturally. Worst case is a few extra mount attempts on
+        # wrong networks; the alternative is silently never running.
+        log "SSID unreadable (allowed: ${ALLOWED_SSIDS}); attempting mount anyway."
+    else
+        matched=0
+        IFS=',' read -ra _allowed <<< "${ALLOWED_SSIDS}"
+        for s in "${_allowed[@]}"; do
+            # trim surrounding whitespace
+            s="${s#"${s%%[![:space:]]*}"}"
+            s="${s%"${s##*[![:space:]]}"}"
+            [[ "${current_ssid}" == "${s}" ]] && { matched=1; break; }
+        done
+        if [[ ${matched} -eq 0 ]]; then
+            log "Wi-Fi '${current_ssid}' not in allowed list (${ALLOWED_SSIDS}). Skipping, will retry."
+            exit 0
+        fi
+        log "Wi-Fi '${current_ssid}' allowed."
     fi
-    matched=0
-    IFS=',' read -ra _allowed <<< "${ALLOWED_SSIDS}"
-    for s in "${_allowed[@]}"; do
-        # trim surrounding whitespace
-        s="${s#"${s%%[![:space:]]*}"}"
-        s="${s%"${s##*[![:space:]]}"}"
-        [[ "${current_ssid}" == "${s}" ]] && { matched=1; break; }
-    done
-    if [[ ${matched} -eq 0 ]]; then
-        log "Wi-Fi '${current_ssid}' not in allowed list (${ALLOWED_SSIDS}). Skipping, will retry."
-        exit 0
-    fi
-    log "Wi-Fi '${current_ssid}' allowed."
 fi
 
 # --- Source check ----------------------------------------------------------

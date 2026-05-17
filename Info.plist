@@ -26,5 +26,9 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>© 2026 hanak</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>FastTMover reads your current Wi-Fi network name so it only runs when you're on an allowed network (e.g. home). The location itself is never used or stored.</string>
+    <key>NSLocationUsageDescription</key>
+    <string>FastTMover reads your current Wi-Fi network name so it only runs when you're on an allowed network (e.g. home). The location itself is never used or stored.</string>
 </dict>
 </plist>

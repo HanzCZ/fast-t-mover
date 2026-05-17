@@ -1,4 +1,5 @@
 import Foundation
+import CoreWLAN
 
 enum Config {
     static let configDir  = "\(NSHomeDirectory())/.config/fast_t_mover"
@@ -31,8 +32,26 @@ enum Config {
         try? body.write(toFile: configFile, atomically: true, encoding: .utf8)
     }
 
-    /// Return the current Wi-Fi SSID, or nil if not on Wi-Fi.
+    /// Return the current Wi-Fi SSID, or nil if not on Wi-Fi / unreadable.
+    /// macOS 14.4+ requires Location Services authorization to read SSID;
+    /// without it CoreWLAN returns nil and networksetup returns a redacted
+    /// "You are not associated …" line. The caller should treat nil as
+    /// "unknown" rather than "not on Wi-Fi".
     static func currentSSID() -> String? {
+        // Preferred: CoreWLAN (faster, works once Location is granted).
+        if let ssid = coreWLANSSID(), !ssid.isEmpty {
+            return ssid
+        }
+        // Fallback: networksetup — also Location-gated on 14.4+ but free
+        // on older macOS where this code path still matters.
+        return networksetupSSID()
+    }
+
+    private static func coreWLANSSID() -> String? {
+        CWWiFiClient.shared().interface()?.ssid()
+    }
+
+    private static func networksetupSSID() -> String? {
         guard let iface = currentWiFiInterface() else { return nil }
         let task = Process()
         task.launchPath = "/usr/sbin/networksetup"
@@ -45,8 +64,9 @@ enum Config {
         let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(),
                          encoding: .utf8) ?? ""
         guard let range = out.range(of: "Current Wi-Fi Network: ") else { return nil }
-        return out[range.upperBound...]
+        let ssid = out[range.upperBound...]
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        return ssid.isEmpty ? nil : ssid
     }
 
     private static func currentWiFiInterface() -> String? {

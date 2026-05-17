@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreLocation
 
 struct SettingsView: View {
     @AppStorage("sourceDir") private var sourceDir  = "\(NSHomeDirectory())/Downloads"
@@ -58,7 +59,7 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                     Button("Add current") { addCurrentSSID() }
                 }
-                Text("If non-empty, the script only runs when connected to one of these Wi-Fis. Off-network ticks exit cleanly and retry on the next tick — the daily lock is only taken on success.")
+                Text("You can also just type your Wi-Fi name into the field above. Reading the current SSID needs Location Services permission on macOS 14.4+; if blocked, manual entry always works.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -151,8 +152,23 @@ struct SettingsView: View {
     }
 
     private func addCurrentSSID() {
+        LocationPermissionManager.shared.ensureAuthorized { status in
+            switch status {
+            case .authorizedAlways, .authorized:
+                self.appendCurrentSSID()
+            case .denied, .restricted:
+                self.statusMessage = "Location Services denied. Type SSID manually, or enable in System Settings → Privacy & Security → Location Services → FastTMover."
+            case .notDetermined:
+                self.statusMessage = "Permission prompt dismissed. Try again, or type SSID manually."
+            @unknown default:
+                self.statusMessage = "Unknown Location Services state. Type SSID manually."
+            }
+        }
+    }
+
+    private func appendCurrentSSID() {
         guard let ssid = Config.currentSSID(), !ssid.isEmpty else {
-            statusMessage = "Not connected to Wi-Fi."
+            statusMessage = "Could not read Wi-Fi name (system returned empty). Type it manually above."
             return
         }
         let existing = allowedSSIDs
