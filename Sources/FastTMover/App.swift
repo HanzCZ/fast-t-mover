@@ -37,7 +37,8 @@ struct MenuContents: View {
         Button("Test Notification") {
             NotificationManager.shared.post(
                 title: "FastTMover",
-                body: "Notifications are working."
+                body: "Notifications are working.",
+                kind: .success
             )
         }
         Divider()

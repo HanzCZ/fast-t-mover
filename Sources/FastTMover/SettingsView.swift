@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage("destSubdir") private var destSubdir = "new-torrents"
     @AppStorage("pattern")   private var pattern    = "*.torrent"
     @AppStorage("allowedSSIDs") private var allowedSSIDs = ""
+    @AppStorage("intervalHours") private var intervalHours: Int = 24
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     @State private var statusMessage = ""
@@ -43,10 +44,17 @@ struct SettingsView: View {
             }
 
             Section("Automation") {
-                Toggle("Run automatically (≈ on wake, max 1×/day)",
+                Toggle("Run automatically (≈ on wake)",
                        isOn: $autoRunEnabled)
                     .onChange(of: autoRunEnabled, perform: applyAutoRun)
-                Text("Uses a launchd agent that polls every 15 min; an internal lock keeps it to one effective run per day.")
+                Picker("Minimum interval between runs", selection: $intervalHours) {
+                    Text("Every wake (no lock)").tag(0)
+                    Text("Every hour").tag(1)
+                    Text("Every 4 hours").tag(4)
+                    Text("Every 12 hours").tag(12)
+                    Text("Once a day").tag(24)
+                }
+                Text("LaunchAgent ticks every 15 min; the interval above gates the actual work. With Wi-Fi whitelist set, the first allowed-Wi-Fi tick after the interval elapses does the job.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -84,7 +92,8 @@ struct SettingsView: View {
         Config.writeConfig(
             sourceDir: sourceDir, smbURL: smbURL,
             destSubdir: destSubdir, pattern: pattern,
-            allowedSSIDs: allowedSSIDs
+            allowedSSIDs: allowedSSIDs,
+            intervalHours: intervalHours
         )
         statusMessage = "Saved to \(Config.configFile)"
     }
