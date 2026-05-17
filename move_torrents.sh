@@ -207,6 +207,8 @@ fi
 # Diagnostic: what is actually mounted at our expected point?
 mount_line="$(mount | grep " on ${MOUNT_POINT} " || true)"
 log "Mount: ${mount_line:-NONE — unexpected!}"
+df_line="$(df -h "${MOUNT_POINT}" 2>/dev/null | tail -n 1 || true)"
+log "df:    ${df_line:-N/A}"
 
 # --- Ensure destination ----------------------------------------------------
 DEST_DIR="${MOUNT_POINT}/${DEST_SUBDIR}"
@@ -244,7 +246,7 @@ for src in "${found_files[@]}"; do
         continue
     fi
 
-    # 2. Verify size
+    # 2a. Quick size sanity (fast, uses cached stat).
     src_size=$(stat -f%z -- "${src}" 2>/dev/null || echo "")
     dest_size=$(stat -f%z -- "${dest}" 2>/dev/null || echo "")
     if [[ -z "${src_size}" || -z "${dest_size}" || "${src_size}" != "${dest_size}" ]]; then
@@ -253,7 +255,19 @@ for src in "${found_files[@]}"; do
         failed=$((failed + 1))
         continue
     fi
-    log "Verified: ${dest} (${dest_size} B)"
+
+    # 2b. Real content verify by md5. Forces an actual read from the SMB
+    # share so we catch the 'cp succeeded into write-back cache but bytes
+    # never landed on the server' failure mode (silent stale-session loss).
+    src_md5=$(md5 -q -- "${src}" 2>/dev/null || echo "")
+    dest_md5=$(md5 -q -- "${dest}" 2>/dev/null || echo "")
+    if [[ -z "${src_md5}" || -z "${dest_md5}" || "${src_md5}" != "${dest_md5}" ]]; then
+        log "Content mismatch for ${name} (src md5=${src_md5:-?} dest md5=${dest_md5:-?}) — source kept, partial dest removed."
+        rm -f -- "${dest}" 2>/dev/null
+        failed=$((failed + 1))
+        continue
+    fi
+    log "Verified: ${dest} (${dest_size} B, md5 ${dest_md5})"
 
     # 3. Verified — safe to remove source
     if rm -- "${src}" 2>>"${LOG_FILE}"; then
