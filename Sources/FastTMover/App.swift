@@ -9,7 +9,9 @@ struct FastTMoverApp: App {
         MenuBarExtra {
             MenuContents()
         } label: {
-            Image(systemName: "tray.and.arrow.up")
+            // Text label + symbol for max visibility — easier to spot in a
+            // crowded menu bar on a notched MacBook than a bare SF symbol.
+            Label("FTM", systemImage: "externaldrive.fill.badge.plus")
         }
         .menuBarExtraStyle(.menu)
 
