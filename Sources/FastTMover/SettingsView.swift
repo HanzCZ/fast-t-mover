@@ -112,6 +112,12 @@ struct SettingsView: View {
     private var form: some View {
         Form {
             Section {
+                PermissionsSection()
+            } header: {
+                SectionHeader(icon: "lock.shield.fill", tint: .indigo, title: "Permissions")
+            }
+
+            Section {
                 LabeledField("Folder") {
                     HStack {
                         TextField("", text: $sourceDir)
@@ -165,8 +171,6 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Launch FastTMover at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin, perform: applyLaunchAtLogin)
                 Toggle("Run automatically (≈ on wake)", isOn: $autoRunEnabled)
                     .onChange(of: autoRunEnabled, perform: applyAutoRun)
                 LabeledField("Minimum interval") {
