@@ -26,10 +26,21 @@ cleanly without taking the lock so the next tick retries.
 - Xcode Command Line Tools — `xcode-select --install` if missing
 - (Optional) `gh` CLI authenticated, or just `git clone` over HTTPS
 
-### Install or reinstall (one command)
+### A) Download the .dmg (no toolchain needed)
 
-The same command works for the first install and for every update. It quits
-any running copy, rebuilds, replaces `/Applications/FastTMover.app`, and
+Grab the latest pre-built `.dmg` from
+[**Releases**](https://github.com/HanzCZ/fast-t-mover/releases/latest),
+open it, and drag **FastTMover.app** to **Applications**.
+
+Because the build is ad-hoc signed, the first launch needs a Gatekeeper
+override: **right-click the app → Open → Open**. Subsequent launches are
+normal.
+
+### B) Build from source (one command)
+
+Used for development and for installing the bleeding-edge `main`. The same
+command works for the first install and for every update — it quits any
+running copy, rebuilds, replaces `/Applications/FastTMover.app`, and
 relaunches.
 
 ```bash
