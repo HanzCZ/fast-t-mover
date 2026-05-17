@@ -12,7 +12,8 @@ enum Config {
         destSubdir: String,
         pattern: String,
         allowedSSIDs: String,
-        intervalHours: Int
+        intervalHours: Int,
+        maxAgeDays: Int
     ) {
         try? FileManager.default.createDirectory(
             atPath: configDir, withIntermediateDirectories: true
@@ -25,6 +26,7 @@ enum Config {
         PATTERN=\(shellQuote(pattern))
         ALLOWED_SSIDS=\(shellQuote(allowedSSIDs))
         INTERVAL_HOURS=\(intervalHours)
+        MAX_AGE_DAYS=\(maxAgeDays)
         """
         try? body.write(toFile: configFile, atomically: true, encoding: .utf8)
     }

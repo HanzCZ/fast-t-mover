@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage("pattern")   private var pattern    = "*.torrent"
     @AppStorage("allowedSSIDs") private var allowedSSIDs = ""
     @AppStorage("intervalHours") private var intervalHours: Int = 24
+    @AppStorage("maxAgeDays") private var maxAgeDays: Int = 0
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     @State private var statusMessage = ""
@@ -22,6 +23,12 @@ struct SettingsView: View {
                 }
                 TextField("File pattern (glob)", text: $pattern)
                     .textFieldStyle(.roundedBorder)
+                Picker("Only files modified within", selection: $maxAgeDays) {
+                    Text("All time").tag(0)
+                    Text("Last week").tag(7)
+                    Text("Last month").tag(30)
+                    Text("Last year").tag(365)
+                }
             }
 
             Section("Destination (SMB share)") {
@@ -93,7 +100,8 @@ struct SettingsView: View {
             sourceDir: sourceDir, smbURL: smbURL,
             destSubdir: destSubdir, pattern: pattern,
             allowedSSIDs: allowedSSIDs,
-            intervalHours: intervalHours
+            intervalHours: intervalHours,
+            maxAgeDays: maxAgeDays
         )
         statusMessage = "Saved to \(Config.configFile)"
     }

@@ -22,6 +22,9 @@ ALLOWED_SSIDS=""
 # Minimum hours between successful runs. 0 = run on every tick.
 # 24 = once daily (default); 1 = hourly, 4 = every 4 hours, etc.
 INTERVAL_HOURS=24
+# Only consider files modified within the last N days. 0 = no age limit.
+# Useful when the source folder is huge/old.
+MAX_AGE_DAYS=0
 
 CONFIG_FILE="${HOME}/.config/fast_t_mover/config"
 if [[ -f "${CONFIG_FILE}" ]]; then
@@ -147,10 +150,14 @@ else
     find_pattern="${PATTERN}"
 fi
 
+find_args=(-maxdepth 1 -type f -name "${find_pattern}")
+if [[ ${MAX_AGE_DAYS} -gt 0 ]]; then
+    find_args+=(-mtime "-${MAX_AGE_DAYS}")
+fi
 found_files=()
 while IFS= read -r -d '' f; do
     found_files+=("$f")
-done < <(find "${SOURCE_DIR}" -maxdepth 1 -type f -name "${find_pattern}" -print0)
+done < <(find "${SOURCE_DIR}" "${find_args[@]}" -print0)
 
 if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
