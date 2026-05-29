@@ -25,6 +25,17 @@ INTERVAL_HOURS=24
 # Only consider files modified within the last N days. 0 = no age limit.
 # Useful when the source folder is huge/old.
 MAX_AGE_DAYS=0
+# --- Reliability tuning for flaky SMB sessions ----------------------------
+# Number of attempts per file before giving up (one attempt = copy + verify).
+# Between attempts we refresh the SMB session (remount) and back off.
+RETRY_ATTEMPTS=3
+# Seconds to wait after a failed attempt before retrying — lets a stale
+# write-back session settle.
+RETRY_DELAY_SECONDS=5
+# Seconds to pause between files. Copying many files back-to-back can
+# overload the SMB session (observed: bursts of md5 read-back failures).
+# 0 = no pause. A small value trades speed for reliability.
+INTER_FILE_DELAY_SECONDS=2
 
 CONFIG_FILE="${HOME}/.config/fast_t_mover/config"
 if [[ -f "${CONFIG_FILE}" ]]; then
@@ -218,6 +229,17 @@ mount_share() {
     return 1
 }
 
+# Drop the current SMB session and establish a fresh one. Used to recover
+# from a stale write-back session mid-batch (the failure mode where cp
+# reports success but the bytes never land / can't be read back).
+remount_share() {
+    log "Remounting ${SMB_URL} (fresh session) ..."
+    diskutil unmount "${MOUNT_POINT}" >/dev/null 2>&1 \
+        || umount "${MOUNT_POINT}" >/dev/null 2>&1 || true
+    sleep 1
+    mount_share
+}
+
 if ! mount_share; then
     # Soft-fail: most likely off-network or VPN not up. Don't set the daily
     # lock — next launchd tick will retry.
@@ -256,49 +278,67 @@ for src in "${found_files[@]}"; do
         base="${name%.*}"
         dest="${DEST_DIR}/${base}.${ts}.${ext}"
     fi
-    log "Copying: ${src}"
-    log "     -> ${dest}"
 
-    # 1. Copy
-    if ! cp -- "${src}" "${dest}" 2>>"${LOG_FILE}"; then
-        log "FAILED to copy: ${name} — source kept."
-        rm -f -- "${dest}" 2>/dev/null   # remove any partial
-        failed=$((failed + 1))
-        continue
-    fi
+    success=0
+    for attempt in $(seq 1 "${RETRY_ATTEMPTS}"); do
+        log "Copying (attempt ${attempt}/${RETRY_ATTEMPTS}): ${src}"
+        log "     -> ${dest}"
 
-    # 2a. Quick size sanity (fast, uses cached stat).
-    src_size=$(stat -f%z -- "${src}" 2>/dev/null || echo "")
-    dest_size=$(stat -f%z -- "${dest}" 2>/dev/null || echo "")
-    if [[ -z "${src_size}" || -z "${dest_size}" || "${src_size}" != "${dest_size}" ]]; then
-        log "Size mismatch for ${name} (src=${src_size} dest=${dest_size}) — source kept, partial dest removed."
-        rm -f -- "${dest}" 2>/dev/null
-        failed=$((failed + 1))
-        continue
-    fi
+        # 1. Copy
+        if ! cp -- "${src}" "${dest}" 2>>"${LOG_FILE}"; then
+            log "Attempt ${attempt}: copy failed for ${name}."
+            rm -f -- "${dest}" 2>/dev/null   # remove any partial
+        else
+            # 2a. Quick size sanity (fast, uses cached stat).
+            src_size=$(stat -f%z -- "${src}" 2>/dev/null || echo "")
+            dest_size=$(stat -f%z -- "${dest}" 2>/dev/null || echo "")
+            if [[ -z "${src_size}" || -z "${dest_size}" || "${src_size}" != "${dest_size}" ]]; then
+                log "Attempt ${attempt}: size mismatch for ${name} (src=${src_size} dest=${dest_size})."
+                rm -f -- "${dest}" 2>/dev/null
+            else
+                # 2b. Real content verify by md5. Forces an actual read from
+                # the SMB share so we catch the 'cp succeeded into write-back
+                # cache but bytes never landed' failure mode (stale session).
+                src_md5=$(md5 -q -- "${src}" 2>/dev/null || echo "")
+                dest_md5=$(md5 -q -- "${dest}" 2>/dev/null || echo "")
+                if [[ -z "${src_md5}" || -z "${dest_md5}" || "${src_md5}" != "${dest_md5}" ]]; then
+                    log "Attempt ${attempt}: content mismatch for ${name} (src md5=${src_md5:-?} dest md5=${dest_md5:-?})."
+                    rm -f -- "${dest}" 2>/dev/null
+                else
+                    # 3. Verified — safe to remove source.
+                    log "Verified: ${dest} (${dest_size} B, md5 ${dest_md5})"
+                    if rm -- "${src}" 2>>"${LOG_FILE}"; then
+                        log "Moved: ${name} -> ${dest}"
+                    else
+                        # Destination is good; only the local rm failed.
+                        # Count as success but warn.
+                        log "Moved ${name} -> ${dest} but could not delete source (will retry next run)."
+                    fi
+                    success=1
+                    break
+                fi
+            fi
+        fi
 
-    # 2b. Real content verify by md5. Forces an actual read from the SMB
-    # share so we catch the 'cp succeeded into write-back cache but bytes
-    # never landed on the server' failure mode (silent stale-session loss).
-    src_md5=$(md5 -q -- "${src}" 2>/dev/null || echo "")
-    dest_md5=$(md5 -q -- "${dest}" 2>/dev/null || echo "")
-    if [[ -z "${src_md5}" || -z "${dest_md5}" || "${src_md5}" != "${dest_md5}" ]]; then
-        log "Content mismatch for ${name} (src md5=${src_md5:-?} dest md5=${dest_md5:-?}) — source kept, partial dest removed."
-        rm -f -- "${dest}" 2>/dev/null
-        failed=$((failed + 1))
-        continue
-    fi
-    log "Verified: ${dest} (${dest_size} B, md5 ${dest_md5})"
+        # Attempt failed. If retries remain, refresh the SMB session and
+        # back off before trying this file again.
+        if (( attempt < RETRY_ATTEMPTS )); then
+            log "Retrying ${name} after ${RETRY_DELAY_SECONDS}s (remounting first)."
+            remount_share || log "Remount failed; will still retry the copy."
+            sleep "${RETRY_DELAY_SECONDS}"
+        fi
+    done
 
-    # 3. Verified — safe to remove source
-    if rm -- "${src}" 2>>"${LOG_FILE}"; then
-        log "Moved: ${name} -> ${dest}"
+    if (( success )); then
         moved=$((moved + 1))
     else
-        # Destination is good; only the local rm failed. Count as success
-        # (the goal was getting it onto the share) but warn.
-        log "Moved ${name} -> ${dest} but could not delete source (will retry next run)."
-        moved=$((moved + 1))
+        log "GAVE UP on ${name} after ${RETRY_ATTEMPTS} attempts — source kept, will retry on next run."
+        failed=$((failed + 1))
+    fi
+
+    # Gentle pause between files so we don't overload the SMB session.
+    if (( INTER_FILE_DELAY_SECONDS > 0 )); then
+        sleep "${INTER_FILE_DELAY_SECONDS}"
     fi
 done
 
@@ -321,7 +361,14 @@ elif [[ ${failed} -gt 0 ]]; then
 else
     notify "success" "FastTMover" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
 fi
-echo "${NOW_TS}" > "${LAST_RUN_FILE}"
+# Only take the interval lock on a fully clean run. If anything failed, leave
+# the lock untouched so the next launchd tick retries the leftovers soon
+# instead of waiting the full INTERVAL_HOURS.
+if (( failed == 0 )); then
+    echo "${NOW_TS}" > "${LAST_RUN_FILE}"
+else
+    log "Failures present — not taking the interval lock; next tick will retry."
+fi
 update_stats "${moved}" "${failed}"
 
 exit 0
