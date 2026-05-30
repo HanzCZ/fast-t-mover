@@ -107,6 +107,7 @@ struct PermissionsSection: View {
     @State private var notifStatus: PermStatus = .unknown
     @State private var locationStatus: PermStatus = .unknown
     @State private var loginItemStatus: PermStatus = .unknown
+    @State private var mailStatus: PermStatus = .unknown
 
     private let refreshTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
@@ -154,6 +155,21 @@ struct PermissionsSection: View {
                     : ("Enable",  toggleLoginItem),
                 systemSettingsURL: URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
             )
+
+            Divider()
+
+            PermissionRow(
+                icon: "envelope.fill",
+                tint: .indigo,
+                title: "Automation — Mail",
+                subtitle: "Open pre-filled e-mail drafts (OL/DL + invoice) in Apple Mail. Nothing is ever sent automatically.",
+                howTo: "System Settings → Privacy & Security → Automation → HPA → Mail.",
+                status: mailStatus,
+                primaryAction: mailStatus != .granted
+                    ? ("Request", requestMailAutomation)
+                    : nil,
+                systemSettingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+            )
         }
         .onAppear(perform: refreshAll)
         .onReceive(refreshTimer) { _ in refreshAll() }
@@ -181,12 +197,21 @@ struct PermissionsSection: View {
         refreshLoginItem()
     }
 
+    private func requestMailAutomation() {
+        MailAutomation.request { refreshMailAutomation() }
+    }
+
     // MARK: - Status refresh
 
     private func refreshAll() {
         refreshNotifications()
         refreshLocation()
         refreshLoginItem()
+        refreshMailAutomation()
+    }
+
+    private func refreshMailAutomation() {
+        mailStatus = MailAutomation.status()
     }
 
     private func refreshNotifications() {

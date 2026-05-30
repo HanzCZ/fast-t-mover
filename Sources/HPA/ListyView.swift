@@ -260,18 +260,18 @@ struct MonthEditorView: View {
     }
 
     // Generate the OL PDF and open a Mail draft (to Adam Motloch) with it
-    // attached. Period in subject/body is numeric "MM YYYY".
+    // attached. Period in subject/body is the Czech month name + year.
     private func emailOL() {
         guard let m = store.month(monthID) else { return }
-        let mm = String(format: "%02d", m.month)
+        let period = "\(CzCal.monthName(m.month)) \(m.year)"
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(ListyPDF.filename(kind: .ol, month: m))
         guard ListyPDF.write(kind: .ol, month: m, data: store.data, to: url) else {
             NSSound.beep(); return
         }
-        let subject = "Jan Hanák - SSGH - Objednávka \(mm) \(m.year)"
+        let subject = "Jan Hanák - SSGH - Objednávka \(period)"
         let body = "Dobrý den, \n"
-            + "posílám objednávkový list na měsíc \(mm) \(m.year)\n\n"
+            + "posílám objednávkový list na měsíc \(period)\n\n"
             + "S pozdravem,\nJan Hanák"
         Emailer.composeDraft(to: "adam.motloch@ssgh.cz",
                              subject: subject, body: body, attachments: [url])
