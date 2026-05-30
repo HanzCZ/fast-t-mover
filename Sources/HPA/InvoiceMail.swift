@@ -12,9 +12,9 @@ enum InvoiceMail {
         var errorDescription: String? {
             switch self {
             case .noDL(let m, let y):
-                return "DL pro období \(String(format: "%02d", m)) \(y) v listech neexistuje."
+                return "DL pro období \(CzCal.monthName(m)) \(y) v listech neexistuje."
             case .noInvoice(let m, let y):
-                return "Faktura pro období \(String(format: "%02d", m)) \(y) ve Fakturoidu neexistuje — vytvoř ji nejdřív."
+                return "Faktura pro období \(CzCal.monthName(m)) \(y) ve Fakturoidu neexistuje — vytvoř ji nejdřív."
             case .pdfFail:
                 return "Nepodařilo se vygenerovat DL PDF."
             }
@@ -37,10 +37,10 @@ enum InvoiceMail {
         }
         let invURL = try await FakturoidClient.downloadPDF(inv)
 
-        let mm = String(format: "%02d", month)
-        let subject = "Jan Hanák - SSGH - objednávka \(mm) \(year)"
+        let period = "\(CzCal.monthName(month)) \(year)"
+        let subject = "Jan Hanák - SSGH - objednávka \(period)"
         let body = "Dobrý den, \n"
-            + "posílám fakturu za odpracované hodiny a výpis odpracovaných hodin v příloze za \(mm) \(year).\n\n"
+            + "posílám fakturu za odpracované hodiny a výpis odpracovaných hodin v příloze za \(period).\n\n"
             + "S pozdravem,\nJan Hanák"
         Emailer.composeDraft(to: recipient, subject: subject, body: body,
                              attachments: [invURL, dlURL])

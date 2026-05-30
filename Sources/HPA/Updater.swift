@@ -162,7 +162,10 @@ enum UpdaterUI {
         Updater.checkLatest { result in
             switch result {
             case .upToDate(let cur):
-                alert("Máš nejnovější verzi", "HPA \(cur) je aktuální.", .informational)
+                // No dialog when already current — just a notification
+                // (silently no-ops if notifications aren't enabled).
+                NotificationManager.shared.post(
+                    title: "HPA", body: "Máš nejnovější verzi (\(cur)).", kind: .success)
             case .error(let msg):
                 alert("Kontrola aktualizací selhala", msg, .warning)
             case .available(let rel):
