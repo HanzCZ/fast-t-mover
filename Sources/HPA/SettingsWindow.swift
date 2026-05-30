@@ -10,7 +10,7 @@ final class SettingsWindowController: NSWindowController {
     private convenience init() {
         let hosting = NSHostingController(rootView: SettingsView())
         let window = NSWindow(contentViewController: hosting)
-        window.title = "FastTMover Settings"
+        window.title = "HPA — Nastavení"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 580, height: 640))

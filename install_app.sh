@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install or reinstall FastTMover.app into /Applications.
+# Install or reinstall HPA.app (Hanak Personal Assistant) into /Applications.
 # Safe to run either way: if a running copy or an existing install is
 # present, it is quit/removed first. No-ops cleanly on a fresh machine.
 
@@ -7,7 +7,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="FastTMover"
+APP_NAME="HPA"
 DIST_APP="dist/${APP_NAME}.app"
 TARGET_DIR="/Applications"
 TARGET_APP="${TARGET_DIR}/${APP_NAME}.app"
@@ -46,6 +46,6 @@ echo "==> launching"
 open "${TARGET_APP}"
 
 echo
-echo "Done. The FTM menu bar item should appear within a second or two."
+echo "Done. The HPA menu bar item should appear within a second or two."
 echo "If the icon looks stale after an update, run:"
 echo "    killall Dock Finder NotificationCenter usernoted"
