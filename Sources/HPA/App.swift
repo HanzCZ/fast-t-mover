@@ -44,19 +44,24 @@ struct MenuContents: View {
         Button("Objednávkové / dodávkové listy…") {
             ListyWindowController.shared.show()
         }
+        Divider()
         Button("Asana — generator Helpdesk Blockers…") {
             AsanaWindowController.shared.show(mode: .blockers)
         }
         Button("Asana — generator Sprint Passives…") {
             AsanaWindowController.shared.show(mode: .passives)
         }
+        Divider()
+        Button("Fakturoid — faktury…") {
+            FakturoidWindowController.shared.show()
+        }
+        Divider()
         Button("Settings…") {
             SettingsWindowController.shared.show()
         }
         Button("Show Log") {
             NSWorkspace.shared.open(URL(fileURLWithPath: Config.logFile))
         }
-        Divider()
         Button("Zkontrolovat aktualizace…") {
             UpdaterUI.checkInteractive()
         }

@@ -26,10 +26,14 @@ enum AsanaClient {
         }
     }
 
+    static let keychainService = "com.hanak.hpa.asana"
+    static let keychainAccount = "asana_token"
+
     // Prefer the Keychain (set via Settings); fall back to the legacy
     // ~/.config/hpa/asana_token file so existing setups keep working.
     static func loadToken() -> String? {
-        if let t = Keychain.get()?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+        if let t = Keychain.get(service: keychainService, account: keychainAccount)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
             return t
         }
         let path = ("~/.config/hpa/asana_token" as NSString).expandingTildeInPath
@@ -42,10 +46,13 @@ enum AsanaClient {
 
     @discardableResult
     static func saveToken(_ token: String) -> Bool {
-        Keychain.set(token.trimmingCharacters(in: .whitespacesAndNewlines))
+        Keychain.set(token.trimmingCharacters(in: .whitespacesAndNewlines),
+                     service: keychainService, account: keychainAccount)
     }
 
-    static func clearToken() { Keychain.clear() }
+    static func clearToken() {
+        Keychain.clear(service: keychainService, account: keychainAccount)
+    }
 
     // Verify the stored token. Returns "Name <email>" on success.
     static func testConnection() async -> Result<String, Error> {

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("maxAgeDays")   private var maxAgeDays: Int = 0
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
     @AppStorage("showInDock")   private var showInDock = false
+    @AppStorage("listyTargetHours") private var listyTargetHours: Double = 128
 
     @State private var statusMessage = ""
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -21,6 +22,10 @@ struct SettingsView: View {
     @ObservedObject private var asana = AsanaBlockerSettings.shared
     @State private var asanaToken = ""
     @State private var asanaConnStatus = ""
+    @AppStorage("fakturoidAmount") private var fakturoidAmount: Double = FakturoidConfig.defaultAmount
+    @State private var fakturoidID = ""
+    @State private var fakturoidSecret = ""
+    @State private var fakturoidStatus = ""
 
     // Refresh stats periodically so the hero card stays live while the
     // window is open and the script runs in the background.
@@ -220,6 +225,19 @@ struct SettingsView: View {
             }
 
             Section {
+                LabeledField("Cílové hodiny") {
+                    TextField("", value: $listyTargetHours, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                }
+                Text("Když součet hodin OL nebo DL není roven této hodnotě, je v okně listů zvýrazněn červeně.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                SectionHeader(icon: "doc.text.fill", tint: .indigo, title: "Listy (OL/DL)")
+            }
+
+            Section {
                 LabeledField("Token") {
                     SecureField("vlož Asana Personal Access Token", text: $asanaToken)
                         .textFieldStyle(.roundedBorder)
@@ -268,14 +286,59 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledField("Vygenerováno (ostré)") {
+                LabeledField("Helpdesk blockery (ostré)") {
                     Text("\(asana.realCreated)").font(.body.monospacedDigit()).bold()
                 }
-                LabeledField("Vygenerováno (debug)") {
+                LabeledField("Helpdesk blockery (debug)") {
                     Text("\(asana.debugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
                 }
+                LabeledField("Sprint Passives (ostré)") {
+                    Text("\(asana.passivesCreated)").font(.body.monospacedDigit()).bold()
+                }
+                LabeledField("Sprint Passives (debug)") {
+                    Text("\(asana.passivesDebugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
+                }
             } header: {
-                SectionHeader(icon: "chart.bar.fill", tint: .mint, title: "Asana — statistiky blockerů")
+                SectionHeader(icon: "chart.bar.fill", tint: .mint, title: "Asana — vygenerované položky")
+            }
+
+            Section {
+                LabeledField("Client ID") {
+                    SecureField("Fakturoid client ID", text: $fakturoidID)
+                        .textFieldStyle(.roundedBorder)
+                }
+                LabeledField("Client Secret") {
+                    SecureField("Fakturoid client secret", text: $fakturoidSecret)
+                        .textFieldStyle(.roundedBorder)
+                }
+                HStack {
+                    Button("Uložit přihlášení") {
+                        FakturoidClient.saveCreds(id: fakturoidID, secret: fakturoidSecret)
+                        fakturoidID = ""; fakturoidSecret = ""
+                        testFakturoid()
+                    }
+                    .disabled(fakturoidID.trimmingCharacters(in: .whitespaces).isEmpty
+                              || fakturoidSecret.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Test spojení") { testFakturoid() }
+                        .disabled(!FakturoidClient.hasCreds)
+                    Button("Smazat") {
+                        FakturoidClient.clearCreds()
+                        fakturoidStatus = "Přihlášení smazáno."
+                    }
+                    .disabled(!FakturoidClient.hasCreds)
+                    Spacer()
+                }
+                LabeledField("Částka faktury (CZK)") {
+                    TextField("", value: $fakturoidAmount, format: .number)
+                        .textFieldStyle(.roundedBorder).frame(width: 100)
+                        .multilineTextAlignment(.trailing)
+                }
+                Text(fakturoidStatus.isEmpty
+                     ? (FakturoidClient.hasCreds ? "Přihlášení uloženo v Keychainu." : "Nenastaveno — fakturace nepojede.")
+                     : fakturoidStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                SectionHeader(icon: "doc.plaintext.fill", tint: .orange, title: "Fakturoid — připojení")
             }
         }
         .formStyle(.grouped)
@@ -407,6 +470,18 @@ struct SettingsView: View {
                 case .success(let who): asanaConnStatus = "Připojeno jako \(who)."
                 case .failure(let e):   asanaConnStatus = "Chyba: \(e.localizedDescription)"
                 }
+            }
+        }
+    }
+
+    private func testFakturoid() {
+        fakturoidStatus = "Ověřuji…"
+        Task {
+            do {
+                let name = try await FakturoidClient.testConnection()
+                await MainActor.run { fakturoidStatus = "Připojeno: \(name)." }
+            } catch {
+                await MainActor.run { fakturoidStatus = "Chyba: \(error.localizedDescription)" }
             }
         }
     }

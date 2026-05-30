@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ListyView: View {
     @ObservedObject var store = ListyStore.shared
@@ -85,13 +86,38 @@ struct MonthEditorView: View {
     @ObservedObject var store: ListyStore
     let monthID: UUID
     @State private var kind: DocKind = .ol
+    @AppStorage("listyTargetHours") private var targetHours: Double = 128
 
     private var month: MonthEntry { store.month(monthID) ?? MonthEntry(year: 0, month: 0) }
 
-    private var rows: Binding<[DocRow]> {
+    // Current rows (value snapshot) and mutation helpers. We deliberately do
+    // NOT use a Binding<[DocRow]> with ForEach element bindings: deleting a row
+    // there makes SwiftUI read a now-out-of-range index binding and crash.
+    private var rowsArray: [DocRow] { store.binding(forMonth: monthID, kind: kind) }
+
+    private func setRows(_ arr: [DocRow]) {
+        store.setRows(arr, forMonth: monthID, kind: kind)
+    }
+
+    private func append(_ row: DocRow) {
+        var arr = rowsArray; arr.append(row); setRows(arr)
+    }
+
+    private func deleteRow(_ id: UUID) {
+        var arr = rowsArray; arr.removeAll { $0.id == id }; setRows(arr)
+    }
+
+    // Safe by-id binding: reads/writes the matching row, no-ops if it's gone.
+    private func rowBinding(_ id: UUID) -> Binding<DocRow> {
         Binding(
-            get: { store.binding(forMonth: monthID, kind: kind) },
-            set: { store.setRows($0, forMonth: monthID, kind: kind) }
+            get: { rowsArray.first { $0.id == id } ?? DocRow(kind: .spacer) },
+            set: { newVal in
+                var arr = rowsArray
+                if let i = arr.firstIndex(where: { $0.id == id }) {
+                    arr[i] = newVal
+                    setRows(arr)
+                }
+            }
         )
     }
 
@@ -146,13 +172,13 @@ struct MonthEditorView: View {
         if store.isEnabled(kind, for: month) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Button { rows.wrappedValue.append(.item("", 0)) } label: {
+                    Button { append(.item("", 0)) } label: {
                         Label("Položka", systemImage: "plus")
                     }
-                    Button { rows.wrappedValue.append(.section("")) } label: {
+                    Button { append(.section("")) } label: {
                         Label("Sekce", systemImage: "plus")
                     }
-                    Button { rows.wrappedValue.append(.spacer()) } label: {
+                    Button { append(.spacer()) } label: {
                         Label("Mezera", systemImage: "plus")
                     }
                     Spacer()
@@ -160,21 +186,25 @@ struct MonthEditorView: View {
                 .padding(.horizontal, 16).padding(.vertical, 8)
 
                 List {
-                    ForEach(rows) { $row in
-                        RowEditor(store: store, row: $row,
+                    ForEach(rowsArray) { row in
+                        RowEditor(store: store, row: rowBinding(row.id),
                                   category: nearestCategory(before: row.id))
                             .listRowSeparator(.hidden)
                             .contextMenu {
                                 Button("Smazat řádek", role: .destructive) {
-                                    rows.wrappedValue.removeAll { $0.id == row.id }
+                                    deleteRow(row.id)
                                 }
                             }
                     }
                     .onMove { from, to in
-                        rows.wrappedValue.move(fromOffsets: from, toOffset: to)
+                        var arr = rowsArray
+                        arr.move(fromOffsets: from, toOffset: to)
+                        setRows(arr)
                     }
                     .onDelete { idx in
-                        rows.wrappedValue.remove(atOffsets: idx)
+                        var arr = rowsArray
+                        arr.remove(atOffsets: idx)
+                        setRows(arr)
                     }
                 }
                 .listStyle(.plain)
@@ -190,11 +220,24 @@ struct MonthEditorView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Text("Celkem: ")
-                + Text(formatHours(month.doc(kind).totalHours)).bold()
-                + Text(" hodin")
+        let total = month.doc(kind).totalHours
+        let off = total != targetHours
+        return HStack {
+            Text("Celkem: ").foregroundColor(.secondary)
+                + Text(formatHours(total)).bold().foregroundColor(off ? .red : .primary)
+                + Text(" / \(formatHours(targetHours)) hodin").foregroundColor(.secondary)
+            if off {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red).font(.caption)
+            }
             Spacer()
+            if kind == .ol {
+                Button { emailOL() } label: {
+                    Label("Poslat OL e-mailem", systemImage: "envelope")
+                }
+                .controlSize(.large)
+                .disabled(!store.isEnabled(kind, for: month))
+            }
             Button {
                 guard let m = store.month(monthID) else { return }
                 ListyPDF.export(kind: kind, month: m, data: store.data)
@@ -205,6 +248,24 @@ struct MonthEditorView: View {
             .disabled(!store.isEnabled(kind, for: month))
         }
         .padding(16)
+    }
+
+    // Generate the OL PDF and open a Mail draft (to Adam Motloch) with it
+    // attached. Period in subject/body is numeric "MM YYYY".
+    private func emailOL() {
+        guard let m = store.month(monthID) else { return }
+        let mm = String(format: "%02d", m.month)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(ListyPDF.filename(kind: .ol, month: m))
+        guard ListyPDF.write(kind: .ol, month: m, data: store.data, to: url) else {
+            NSSound.beep(); return
+        }
+        let subject = "Jan Hanák - SSGH - Objednávka \(mm) \(m.year)"
+        let body = "Dobrý den, \n"
+            + "posílám objednávkový list na měsíc \(mm) \(m.year)\n\n"
+            + "S pozdravem,\nJan Hanák"
+        Emailer.composeDraft(to: "adam.motloch@ssgh.cz",
+                             subject: subject, body: body, attachment: url)
     }
 
     private func banner(icon: String, text: String, tint: Color) -> some View {
@@ -220,7 +281,7 @@ struct MonthEditorView: View {
 
     // Category for "save to catalog" = the nearest section header above a row.
     private func nearestCategory(before id: UUID) -> String {
-        let all = rows.wrappedValue
+        let all = rowsArray
         guard let i = all.firstIndex(where: { $0.id == id }) else { return "" }
         for j in stride(from: i, through: 0, by: -1) where all[j].kind == .section {
             return all[j].text
