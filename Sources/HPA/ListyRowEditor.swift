@@ -5,65 +5,69 @@ struct RowEditor: View {
     @Binding var row: DocRow
     let category: String
 
-    private var hoursText: Binding<String> {
-        Binding(
-            get: { formatHours(row.hours) },
-            set: { new in
-                let cleaned = new.replacingOccurrences(of: ",", with: ".")
-                    .trimmingCharacters(in: .whitespaces)
-                row.hours = cleaned.isEmpty ? 0 : (Double(cleaned) ?? row.hours)
-            }
-        )
-    }
+    // Local editing state so typing stays smooth: TextFields bind to @State
+    // (which survives the store-driven re-render that fires on every commit),
+    // and we push changes into the store only when they actually differ.
+    @State private var text: String = ""
+    @State private var hours: Double = 0
 
     var body: some View {
-        switch row.kind {
-        case .section:
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.fill").foregroundStyle(.secondary).font(.caption)
-                TextField("Název sekce", text: $row.text)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.bold())
-            }
-            .padding(.vertical, 2)
+        Group {
+            switch row.kind {
+            case .section:
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.fill").foregroundStyle(.secondary).font(.caption)
+                    TextField("Název sekce", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.body.bold())
+                        .onChange(of: text) { if $0 != row.text { row.text = $0 } }
+                }
+                .padding(.vertical, 2)
 
-        case .item:
-            HStack(spacing: 6) {
-                catalogMenu
-                TextField("Popis položky", text: $row.text)
-                    .textFieldStyle(.roundedBorder)
-                saveToCatalogButton
-                boldButton
-                TextField("0", text: hoursText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 52)
-                    .multilineTextAlignment(.trailing)
-                Text("h").foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            case .item:
+                HStack(spacing: 6) {
+                    catalogMenu
+                    TextField("Popis položky", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: text) { if $0 != row.text { row.text = $0 } }
+                    saveToCatalogButton
+                    boldButton
+                    TextField("0", value: $hours, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 56)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: hours) { if $0 != (row.hours ?? 0) { row.hours = $0 } }
+                    Text("h").foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
 
-        case .spacer:
-            HStack {
-                Text("— prázdný oddělovací řádek —")
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
+            case .spacer:
+                HStack {
+                    Text("— prázdný oddělovací řádek —")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
+        }
+        .onAppear {
+            text = row.text
+            hours = row.hours ?? 0
         }
     }
 
     private var catalogMenu: some View {
         Menu {
-            let sugg = store.suggestions(matching: row.text)
+            let sugg = store.suggestions(matching: text)
             if !sugg.isEmpty {
                 ForEach(sugg) { e in
-                    Button(e.item) { row.text = e.item }
+                    Button(e.item) { text = e.item }
                 }
             } else {
                 ForEach(store.catalogCategories, id: \.self) { cat in
                     Section(cat) {
                         ForEach(store.data.catalog.filter { $0.category == cat }) { e in
-                            Button(e.item) { row.text = e.item }
+                            Button(e.item) { text = e.item }
                         }
                     }
                 }
@@ -79,7 +83,7 @@ struct RowEditor: View {
 
     @ViewBuilder
     private var saveToCatalogButton: some View {
-        let trimmed = row.text.trimmingCharacters(in: .whitespaces)
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty && !store.catalogContains(trimmed) {
             Button {
                 store.addToCatalog(item: trimmed, category: category)

@@ -34,9 +34,15 @@ struct ListPDFView: View {
         .background(Color.white)
     }
 
+    // Rows to print: drop item rows with zero hours (kept in the editor, just
+    // not shown on the PDF).
+    private var printedRows: [DocRow] {
+        doc.rows.filter { $0.kind != .item || ($0.hours ?? 0) != 0 }
+    }
+
     private var table: some View {
         VStack(spacing: 0) {
-            ForEach(doc.rows) { row in
+            ForEach(printedRows) { row in
                 rowView(row)
                     .overlay(alignment: .bottom) { hLine }
             }
