@@ -17,6 +17,11 @@ enum AsanaConfig {
     static let debugProjectGID = "1211198655098271"     // JH Tasks
     static let janHanakGID = "1211175839412503"         // Jan Hanák
 
+    // Browser permalinks (Asana permalink_url) for quick-open links in the UI.
+    static let internalITURL = URL(string: "https://app.asana.com/1/1205885361319934/project/1213719009291832")!
+    static let alSSGHURL     = URL(string: "https://app.asana.com/1/1205885361319934/project/1211340374914010")!
+    static let jhTasksURL    = URL(string: "https://app.asana.com/1/1205885361319934/project/1211198655098271")!
+
     // Fixed description template (from the existing Asana rule).
     static let descriptionTemplate =
         "Sem si pište vyřešený seznam úkolů z helpdesku ideálně do subtasku ve formátu\nID - nazev - x h"

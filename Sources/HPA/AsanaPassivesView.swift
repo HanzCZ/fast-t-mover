@@ -71,6 +71,15 @@ struct AsanaPassivesView: View {
             Text("Založí jeden task „Sprint Passives“ pro vybraný sprint s pevnými parametry "
                  + "(Dev Status Todo, Projekt Reoccurring, bez assignee a termínu).")
                 .font(.callout).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Link(destination: AsanaConfig.alSSGHURL) {
+                    Label("AL x SSGH v2", systemImage: "arrow.up.right.square")
+                }
+                Link(destination: AsanaConfig.jhTasksURL) {
+                    Label("JH Tasks (debug)", systemImage: "arrow.up.right.square")
+                }
+            }
+            .font(.callout)
 
             HStack {
                 Text("AL SPRINT").frame(width: 130, alignment: .leading)
