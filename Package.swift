@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "FastTMover",
+    name: "HPA",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "FastTMover",
-            path: "Sources/FastTMover"
+            name: "HPA",
+            path: "Sources/HPA"
         )
     ]
 )

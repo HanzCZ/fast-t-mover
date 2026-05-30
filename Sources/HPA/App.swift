@@ -9,13 +9,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let showInDock = UserDefaults.standard.bool(forKey: "showInDock")
         NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         NotificationManager.shared.setup()
+
+        // Quietly check GitHub for a newer release; prompts only if one exists.
+        let autoCheck = UserDefaults.standard.object(forKey: "autoCheckUpdates") as? Bool ?? true
+        if autoCheck { UpdaterUI.checkOnLaunch() }
     }
 }
 
 @main
-struct FastTMoverApp: App {
+struct HPAApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @AppStorage("autoRunEnabled") private var autoRunEnabled = false
 
     var body: some Scene {
         MenuBarExtra {
@@ -23,39 +26,30 @@ struct FastTMoverApp: App {
         } label: {
             // Text label + symbol for max visibility — easier to spot in a
             // crowded menu bar on a notched MacBook than a bare SF symbol.
-            Label("FTM", systemImage: "externaldrive.fill.badge.plus")
+            Label("HPA", systemImage: "person.crop.circle.badge.checkmark")
         }
         .menuBarExtraStyle(.menu)
     }
 }
 
 struct MenuContents: View {
-    @AppStorage("autoRunEnabled") private var autoRunEnabled = false
-
     var body: some View {
-        Button("Run Now") {
+        Button("Move Files") {
             _ = Runner.run(force: true)
         }
-        Button("Run Now (debug)") {
+        Button("Move Files (debug)") {
             _ = Runner.run(debug: true, force: true)
         }
-        Button("Test Notification") {
-            NotificationManager.shared.post(
-                title: "FastTMover",
-                body: "Notifications are working.",
-                kind: .success
-            )
+        Divider()
+        Button("Objednávkové / dodávkové listy…") {
+            ListyWindowController.shared.show()
         }
-        Divider()
-        Toggle("Auto-run on wake", isOn: $autoRunEnabled)
-            .onChange(of: autoRunEnabled) { newValue in
-                if newValue, let script = Runner.scriptPath {
-                    try? LaunchAgent.install(scriptPath: script)
-                } else {
-                    LaunchAgent.uninstall()
-                }
-            }
-        Divider()
+        Button("Asana — generator Helpdesk Blockers…") {
+            AsanaWindowController.shared.show(mode: .blockers)
+        }
+        Button("Asana — generator Sprint Passives…") {
+            AsanaWindowController.shared.show(mode: .passives)
+        }
         Button("Settings…") {
             SettingsWindowController.shared.show()
         }
@@ -63,6 +57,10 @@ struct MenuContents: View {
             NSWorkspace.shared.open(URL(fileURLWithPath: Config.logFile))
         }
         Divider()
+        Button("Zkontrolovat aktualizace…") {
+            UpdaterUI.checkInteractive()
+        }
+        Text("HPA \(Updater.currentVersion)")
         Button("Quit") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }

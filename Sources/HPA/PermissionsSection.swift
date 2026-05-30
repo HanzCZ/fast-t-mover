@@ -117,7 +117,7 @@ struct PermissionsSection: View {
                 tint: .red,
                 title: "Notifications",
                 subtitle: "Banner with success / failure / info icon after every run.",
-                howTo: "System Settings → Notifications → FastTMover → Allow Notifications + Banner style.",
+                howTo: "System Settings → Notifications → HPA → Allow Notifications + Banner style.",
                 status: notifStatus,
                 primaryAction: notifStatus == .notDetermined
                     ? ("Request", requestNotifications)
@@ -132,7 +132,7 @@ struct PermissionsSection: View {
                 tint: .blue,
                 title: "Location Services",
                 subtitle: "Read your current Wi-Fi name to gate the run on allowed SSIDs (required on macOS 14.4+).",
-                howTo: "System Settings → Privacy & Security → Location Services → FastTMover → On.",
+                howTo: "System Settings → Privacy & Security → Location Services → HPA → On.",
                 status: locationStatus,
                 primaryAction: locationStatus == .notDetermined
                     ? ("Request", requestLocation)
@@ -146,8 +146,8 @@ struct PermissionsSection: View {
                 icon: "power",
                 tint: .green,
                 title: "Launch at Login",
-                subtitle: "Start FastTMover automatically when you log in.",
-                howTo: "System Settings → General → Login Items & Extensions → FastTMover.",
+                subtitle: "Start HPA automatically when you log in.",
+                howTo: "System Settings → General → Login Items & Extensions → HPA.",
                 status: loginItemStatus,
                 primaryAction: loginItemStatus == .granted
                     ? ("Disable", toggleLoginItem)

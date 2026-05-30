@@ -96,14 +96,14 @@ EOF
 }
 
 # macOS notification banner. Writes a line to a queue file that the
-# FastTMover menu-bar app watches and turns into a UNUserNotification
+# HPA menu-bar app watches and turns into a UNUserNotification
 # (with an icon attachment matching `kind`).
 # Falls back to osascript if the app isn't running (best effort).
 # Usage: notify <kind> <title> <message>
 #   kind = success | failure | info
 notify() {
     local kind="${1:-info}"
-    local title="${2:-FastTMover}"
+    local title="${2:-HPA}"
     local msg="$3"
     # Sanitize the field separator out of values
     kind="${kind//|/-}"
@@ -111,7 +111,7 @@ notify() {
     msg="${msg//|/-}"
     local queue="${STATE_DIR}/notify.queue"
     printf '%s|%s|%s\n' "${kind}" "${title}" "${msg}" >> "${queue}"
-    if ! pgrep -q FastTMover; then
+    if ! pgrep -q HPA; then
         FTM_TITLE="${title}" FTM_MSG="${msg}" osascript -e '
             display notification (system attribute "FTM_MSG") with title (system attribute "FTM_TITLE")
         ' >/dev/null 2>&1 || true
@@ -201,7 +201,7 @@ done < <(find "${SOURCE_DIR}" "${find_args[@]}" -print0)
 
 if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
-    notify "info" "FastTMover" "No ${PATTERN} files in $(basename "${SOURCE_DIR}")."
+    notify "info" "HPA" "No ${PATTERN} files in $(basename "${SOURCE_DIR}")."
     echo "${NOW_TS}" > "${LAST_RUN_FILE}"
     update_stats 0 0
     exit 0
@@ -355,11 +355,11 @@ fi
 
 log "Done. moved=${moved} failed=${failed}"
 if [[ ${failed} -gt 0 && ${moved} -gt 0 ]]; then
-    notify "failure" "FastTMover" "Moved ${moved}, failed ${failed}. See log."
+    notify "failure" "HPA" "Moved ${moved}, failed ${failed}. See log."
 elif [[ ${failed} -gt 0 ]]; then
-    notify "failure" "FastTMover" "Failed to move ${failed} file(s). See log."
+    notify "failure" "HPA" "Failed to move ${failed} file(s). See log."
 else
-    notify "success" "FastTMover" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
+    notify "success" "HPA" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
 fi
 # Only take the interval lock on a fully clean run. If anything failed, leave
 # the lock untouched so the next launchd tick retries the leftovers soon

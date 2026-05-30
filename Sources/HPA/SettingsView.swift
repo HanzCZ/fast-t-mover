@@ -18,6 +18,9 @@ struct SettingsView: View {
     @State private var verifyLines: [String] = []
     @State private var verifying = false
     @State private var stats = Stats.load()
+    @ObservedObject private var asana = AsanaBlockerSettings.shared
+    @State private var asanaToken = ""
+    @State private var asanaConnStatus = ""
 
     // Refresh stats periodically so the hero card stays live while the
     // window is open and the script runs in the background.
@@ -138,6 +141,12 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                 }
+                HStack {
+                    Button("Verify samba access") { runVerify() }
+                        .disabled(verifying)
+                    if verifying { ProgressView().controlSize(.small) }
+                    Spacer()
+                }
             } header: {
                 SectionHeader(icon: "folder.fill", tint: .blue, title: "Source")
             }
@@ -171,7 +180,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Run automatically (≈ on wake)", isOn: $autoRunEnabled)
+                Toggle("Auto move files on wake", isOn: $autoRunEnabled)
                     .onChange(of: autoRunEnabled, perform: applyAutoRun)
                 LabeledField("Minimum interval") {
                     Picker("", selection: $intervalHours) {
@@ -196,8 +205,77 @@ struct SettingsView: View {
                 Text("Useful if the menu bar item is hard to find (e.g. notch overflow).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Divider()
+                LabeledField("Test notification") {
+                    Button("Send test") {
+                        NotificationManager.shared.post(
+                            title: "HPA",
+                            body: "Notifications are working.",
+                            kind: .success)
+                        statusMessage = "Test notification sent."
+                    }
+                }
             } header: {
                 SectionHeader(icon: "paintbrush.fill", tint: .pink, title: "Appearance")
+            }
+
+            Section {
+                LabeledField("Token") {
+                    SecureField("vlož Asana Personal Access Token", text: $asanaToken)
+                        .textFieldStyle(.roundedBorder)
+                }
+                HStack {
+                    Button("Uložit token") {
+                        AsanaClient.saveToken(asanaToken)
+                        asanaToken = ""
+                        testAsana()
+                    }
+                    .disabled(asanaToken.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Test spojení") { testAsana() }
+                        .disabled(!AsanaClient.hasToken)
+                    Button("Smazat") {
+                        AsanaClient.clearToken()
+                        asanaConnStatus = "Token smazán."
+                    }
+                    .disabled(!AsanaClient.hasToken)
+                    Spacer()
+                }
+                Text(asanaConnStatus.isEmpty
+                     ? (AsanaClient.hasToken ? "Token uložen v Keychainu." : "Token nenastaven — Asana funkce nepojedou.")
+                     : asanaConnStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                SectionHeader(icon: "key.fill", tint: .orange, title: "Asana — připojení")
+            }
+
+            Section {
+                ForEach(AsanaConfig.roster) { p in
+                    LabeledField("\(p.initials) — \(p.name)") {
+                        TextField("h", value: Binding(
+                            get: { asana.estimate(for: p) },
+                            set: { asana.setEstimate($0, for: p) }
+                        ), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                    }
+                }
+                Text("Výchozí odhady (h) předvyplněné v okně „Asana — helpdesk blockery“. Tam je můžeš ještě upravit per sprint.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                SectionHeader(icon: "number.square.fill", tint: .green, title: "Asana — výchozí odhady")
+            }
+
+            Section {
+                LabeledField("Vygenerováno (ostré)") {
+                    Text("\(asana.realCreated)").font(.body.monospacedDigit()).bold()
+                }
+                LabeledField("Vygenerováno (debug)") {
+                    Text("\(asana.debugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            } header: {
+                SectionHeader(icon: "chart.bar.fill", tint: .mint, title: "Asana — statistiky blockerů")
             }
         }
         .formStyle(.grouped)
@@ -211,13 +289,7 @@ struct SettingsView: View {
                 Button("Save") { saveConfig() }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
-                Button("Verify Access") { runVerify() }
-                    .disabled(verifying)
-                Button("Run Now (debug)") { runDebug() }
                 Spacer()
-                if verifying {
-                    ProgressView().controlSize(.small)
-                }
             }
             if !statusMessage.isEmpty {
                 Text(statusMessage)
@@ -274,7 +346,7 @@ struct SettingsView: View {
             case .authorizedAlways, .authorized:
                 self.appendCurrentSSID()
             case .denied, .restricted:
-                self.statusMessage = "Location Services denied. Type SSID manually, or enable in System Settings → Privacy & Security → Location Services → FastTMover."
+                self.statusMessage = "Location Services denied. Type SSID manually, or enable in System Settings → Privacy & Security → Location Services → HPA."
             case .notDetermined:
                 self.statusMessage = "Permission prompt dismissed. Try again, or type SSID manually."
             @unknown default:
@@ -316,12 +388,25 @@ struct SettingsView: View {
                 verifying = false
                 statusMessage = result.ok ? "Verify Access: all OK" : "Verify Access: see results"
                 NotificationManager.shared.post(
-                    title: "FastTMover",
+                    title: "HPA",
                     body: result.ok
                         ? "Access verification passed."
                         : "Access verification failed — see Settings.",
                     kind: result.ok ? .success : .failure
                 )
+            }
+        }
+    }
+
+    private func testAsana() {
+        asanaConnStatus = "Ověřuji…"
+        Task {
+            let result = await AsanaClient.testConnection()
+            await MainActor.run {
+                switch result {
+                case .success(let who): asanaConnStatus = "Připojeno jako \(who)."
+                case .failure(let e):   asanaConnStatus = "Chyba: \(e.localizedDescription)"
+                }
             }
         }
     }

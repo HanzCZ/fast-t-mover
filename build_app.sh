@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build FastTMover.app from the SwiftPM target.
-# Output: ./dist/FastTMover.app
+# Build HPA.app (Hanak Personal Assistant) from the SwiftPM target.
+# Output: ./dist/HPA.app
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="FastTMover"
-BUNDLE_ID="com.hanak.fasttmover"
+APP_NAME="HPA"
+BUNDLE_ID="com.hanak.hpa"
 DIST_DIR="dist"
 APP_DIR="${DIST_DIR}/${APP_NAME}.app"
 
