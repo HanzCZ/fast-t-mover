@@ -86,6 +86,7 @@ struct MonthEditorView: View {
     @ObservedObject var store: ListyStore
     let monthID: UUID
     @State private var kind: DocKind = .ol
+    @State private var mailing = false
     @AppStorage("listyTargetHours") private var targetHours: Double = 128
 
     private var month: MonthEntry { store.month(monthID) ?? MonthEntry(year: 0, month: 0) }
@@ -231,12 +232,20 @@ struct MonthEditorView: View {
                     .foregroundStyle(.red).font(.caption)
             }
             Spacer()
+            if mailing { ProgressView().controlSize(.small).padding(.trailing, 4) }
             if kind == .ol {
                 Button { emailOL() } label: {
                     Label("Poslat OL e-mailem", systemImage: "envelope")
                 }
                 .controlSize(.large)
                 .disabled(!store.isEnabled(kind, for: month))
+            }
+            if kind == .dl {
+                Button { Task { await emailDLandInvoice() } } label: {
+                    Label("Poslat DL + fakturu", systemImage: "envelope")
+                }
+                .controlSize(.large)
+                .disabled(mailing || !store.isEnabled(kind, for: month))
             }
             Button {
                 guard let m = store.month(monthID) else { return }
@@ -265,7 +274,17 @@ struct MonthEditorView: View {
             + "posílám objednávkový list na měsíc \(mm) \(m.year)\n\n"
             + "S pozdravem,\nJan Hanák"
         Emailer.composeDraft(to: "adam.motloch@ssgh.cz",
-                             subject: subject, body: body, attachment: url)
+                             subject: subject, body: body, attachments: [url])
+    }
+
+    @MainActor
+    private func emailDLandInvoice() async {
+        mailing = true; defer { mailing = false }
+        do {
+            try await InvoiceMail.composeFakturaAndDL(year: month.year, month: month.month)
+        } catch {
+            InvoiceMail.alert(error)
+        }
     }
 
     private func banner(icon: String, text: String, tint: Color) -> some View {

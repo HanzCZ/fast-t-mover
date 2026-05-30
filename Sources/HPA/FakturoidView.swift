@@ -126,10 +126,29 @@ struct FakturoidView: View {
             Button { Task { await download() } } label: {
                 Label("Stáhnout PDF", systemImage: "arrow.down.doc")
             }
+            .controlSize(.large)
+            .disabled(busy || invoice == nil)
+
+            Button { Task { await emailFakturaDL() } } label: {
+                Label("Poslat fakturu + DL", systemImage: "envelope")
+            }
             .controlSize(.large).keyboardShortcut(.defaultAction)
             .disabled(busy || invoice == nil)
         }
         .padding(16)
+    }
+
+    @MainActor
+    private func emailFakturaDL() async {
+        busy = true; defer { busy = false }
+        log.append("• Připravuji e-mail (faktura + DL) pro \(periodLabel)…")
+        do {
+            try await InvoiceMail.composeFakturaAndDL(year: year, month: month)
+            log.append("✓ Otevřen draft v Mailu.")
+        } catch {
+            log.append("✗ \(error.localizedDescription)")
+            InvoiceMail.alert(error)
+        }
     }
 
     @MainActor

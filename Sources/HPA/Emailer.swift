@@ -1,34 +1,27 @@
 import Foundation
 import AppKit
 
-// Open a draft in the default mail client (Apple Mail) with recipient,
-// subject, body and a real file attachment. Primary path is the native
-// "share via email" service (clean attachment, no Automation permission);
-// AppleScript is a fallback.
+// Always opens a draft in Apple Mail specifically (not the system default mail
+// client) via AppleScript, with the files attached. Targeting `application
+// "Mail"` hard-pins Apple Mail regardless of the default mailto handler.
+//
+// Note: scripting Mail needs Automation permission — macOS prompts once
+// (System Settings → Privacy & Security → Automation → HPA → Mail).
 enum Emailer {
     @discardableResult
-    static func composeDraft(to: String, subject: String, body: String, attachment: URL) -> Bool {
-        if let service = NSSharingService(named: .composeEmail) {
-            service.recipients = [to]
-            service.subject = subject
-            let items: [Any] = [body, attachment]   // body as text, file as attachment
-            if service.canPerform(withItems: items) {
-                service.perform(withItems: items)
-                return true
-            }
-        }
-        return composeViaAppleScript(to: to, subject: subject, body: body, attachment: attachment)
-    }
-
-    private static func composeViaAppleScript(to: String, subject: String,
-                                              body: String, attachment: URL) -> Bool {
+    static func composeDraft(to: String, subject: String, body: String, attachments: [URL]) -> Bool {
         func esc(_ s: String) -> String {
             s.replacingOccurrences(of: "\\", with: "\\\\")
              .replacingOccurrences(of: "\"", with: "\\\"")
         }
-        let bodyExpr = body.components(separatedBy: "\n")
+        // Trailing blank line so the attachment lands cleanly below the body.
+        let bodyExpr = (body + "\n").components(separatedBy: "\n")
             .map { "\"\(esc($0))\"" }
             .joined(separator: " & linefeed & ")
+        let attachLines = attachments.map {
+            "        make new attachment with properties {file name:(POSIX file \"\(esc($0.path))\")} at after the last paragraph"
+        }.joined(separator: "\n")
+
         let script = """
         set theBody to \(bodyExpr)
         tell application "Mail"
@@ -36,9 +29,9 @@ enum Emailer {
             tell msg
                 make new to recipient with properties {address:"\(esc(to))"}
             end tell
-            delay 0.5
+            delay 0.3
             tell content of msg
-                make new attachment with properties {file name:(POSIX file "\(esc(attachment.path))")} at after the last paragraph
+        \(attachLines)
             end tell
             activate
         end tell
@@ -48,6 +41,7 @@ enum Emailer {
         do { try script.write(to: tmp, atomically: true, encoding: .utf8) }
         catch { return false }
         defer { try? FileManager.default.removeItem(at: tmp) }
+
         let p = Process()
         p.launchPath = "/usr/bin/osascript"
         p.arguments = [tmp.path]
