@@ -105,6 +105,15 @@ struct AsanaBlockersView: View {
             Text("Založí 4 tasky „Helpdesk Blocker <iniciály>“ do projektu Internal IT v2, "
                  + "každému svému člověku, se stejným sprintem a vlastním odhadem.")
                 .font(.callout).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Link(destination: AsanaConfig.internalITURL) {
+                    Label("Internal IT v2", systemImage: "arrow.up.right.square")
+                }
+                Link(destination: AsanaConfig.jhTasksURL) {
+                    Label("JH Tasks (debug)", systemImage: "arrow.up.right.square")
+                }
+            }
+            .font(.callout)
 
             HStack {
                 Text("AL SPRINT").frame(width: 110, alignment: .leading)
