@@ -3,7 +3,6 @@ import SwiftUI
 struct RowEditor: View {
     @ObservedObject var store: ListyStore
     @Binding var row: DocRow
-    let category: String
 
     // Local editing state so typing stays smooth: TextFields bind to @State
     // (which survives the store-driven re-render that fires on every commit),
@@ -17,20 +16,21 @@ struct RowEditor: View {
             case .section:
                 HStack(spacing: 6) {
                     Image(systemName: "rectangle.fill").foregroundStyle(.secondary).font(.caption)
-                    TextField("Název sekce", text: $text)
+                    TextField("Název sekce", text: $text, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .font(.body.bold())
+                        .lineLimit(1...3)
                         .onChange(of: text) { if $0 != row.text { row.text = $0 } }
                 }
                 .padding(.vertical, 2)
 
             case .item:
-                HStack(spacing: 6) {
+                HStack(alignment: .top, spacing: 6) {
                     catalogMenu
-                    TextField("Popis položky", text: $text)
+                    TextField("Popis položky", text: $text, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...3)
                         .onChange(of: text) { if $0 != row.text { row.text = $0 } }
-                    saveToCatalogButton
                     boldButton
                     TextField("0", value: $hours, format: .number)
                         .textFieldStyle(.roundedBorder)
@@ -79,20 +79,6 @@ struct RowEditor: View {
         .menuIndicator(.hidden)
         .frame(width: 22)
         .help("Vybrat z katalogu / našeptat")
-    }
-
-    @ViewBuilder
-    private var saveToCatalogButton: some View {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty && !store.catalogContains(trimmed) {
-            Button {
-                store.addToCatalog(item: trimmed, category: category)
-            } label: {
-                Image(systemName: "plus.circle").foregroundStyle(.green)
-            }
-            .buttonStyle(.borderless)
-            .help("Uložit do katalogu (\(category.isEmpty ? "Ostatní" : category))")
-        }
     }
 
     private var boldButton: some View {

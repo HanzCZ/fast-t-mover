@@ -188,8 +188,7 @@ struct MonthEditorView: View {
 
                 List {
                     ForEach(rowsArray) { row in
-                        RowEditor(store: store, row: rowBinding(row.id),
-                                  category: nearestCategory(before: row.id))
+                        RowEditor(store: store, row: rowBinding(row.id))
                             .listRowSeparator(.hidden)
                             .contextMenu {
                                 Button("Smazat řádek", role: .destructive) {
@@ -298,13 +297,4 @@ struct MonthEditorView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    // Category for "save to catalog" = the nearest section header above a row.
-    private func nearestCategory(before id: UUID) -> String {
-        let all = rowsArray
-        guard let i = all.firstIndex(where: { $0.id == id }) else { return "" }
-        for j in stride(from: i, through: 0, by: -1) where all[j].kind == .section {
-            return all[j].text
-        }
-        return ""
-    }
 }
