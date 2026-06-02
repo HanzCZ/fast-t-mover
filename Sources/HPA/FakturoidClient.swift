@@ -13,9 +13,22 @@ enum FakturoidConfig {
     static let dueDays = 30
     static let defaultAmount: Double = 92000
 
-    static func lineText(month: Int, year: Int) -> String {
-        "na základě uzavřené Rámcové smlouvy o poskytování služeb ze dne \(contractDate) "
-        + "Vám fakturujeme služby za období: \(CzCal.monthName(month)) \(year)"
+    static func lineText(month: Int, year: Int, pausal: Double = 0) -> String {
+        let base = "na základě uzavřené Rámcové smlouvy o poskytování služeb ze dne \(contractDate) "
+            + "Vám fakturujeme služby za období: \(CzCal.monthName(month)) \(year)"
+        return base + pausalSuffix(pausal)
+    }
+
+    // Suffix appended to the invoice line text when a flat fee (paušál) is
+    // folded into the single line item — so the human reading the invoice
+    // sees what the bump is for. Matches the prefill values from FakturoidView.
+    static func pausalSuffix(_ pausal: Double) -> String {
+        switch pausal {
+        case 0:    return ""
+        case 2670: return " + přefakturace Claude max"
+        case 530:  return " + přefakturace Claude pro"
+        default:   return " + přefakturace"
+        }
     }
 }
 
@@ -150,7 +163,7 @@ enum FakturoidClient {
         return nil
     }
 
-    static func createInvoice(year: Int, month: Int, amount: Double) async throws -> Invoice {
+    static func createInvoice(year: Int, month: Int, amount: Double, pausal: Double = 0) async throws -> Invoice {
         let t = try await token()
         let day = lastDay(year: year, month: month)
         let payload: [String: Any] = [
@@ -161,7 +174,7 @@ enum FakturoidClient {
             "currency": "CZK",
             "payment_method": "bank",
             "lines": [[
-                "name": FakturoidConfig.lineText(month: month, year: year),
+                "name": FakturoidConfig.lineText(month: month, year: year, pausal: pausal),
                 "quantity": 1,
                 "unit_price": amount,
                 "vat_rate": 0,

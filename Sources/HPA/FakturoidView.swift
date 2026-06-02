@@ -108,7 +108,7 @@ struct FakturoidView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Text položky").font(.caption).foregroundStyle(.secondary)
-            Text(FakturoidConfig.lineText(month: month, year: year))
+            Text(FakturoidConfig.lineText(month: month, year: year, pausal: pausal))
                 .font(.callout)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -202,7 +202,7 @@ struct FakturoidView: View {
                     + "na \(formatHours(totalAmount)) CZK\(pausalNote) "
                     + "(vystaveno \(FakturoidClient.lastDay(year: year, month: month)))?")
             guard ok else { log.append("Zrušeno."); return }
-            let created = try await FakturoidClient.createInvoice(year: year, month: month, amount: totalAmount)
+            let created = try await FakturoidClient.createInvoice(year: year, month: month, amount: totalAmount, pausal: pausal)
             invoice = created
             log.append("✓ Vytvořena \(created.number) (\(created.status)).")
             NotificationManager.shared.post(title: "HPA — Fakturoid",
