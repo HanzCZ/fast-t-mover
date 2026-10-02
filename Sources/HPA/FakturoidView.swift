@@ -26,14 +26,15 @@ struct FakturoidView: View {
         let c = cal.dateComponents([.year, .month], from: Date())
         var y = c.year ?? 2026, m = c.month ?? 1
         if m == 1 { m = 12; y -= 1 } else { m -= 1 }
-        // One-time: a stored amount equal to the old 128 h default moves to the
-        // new 129 h default (the field persists whatever was last shown).
+        // One-time: a stored amount equal to an earlier default moves to the
+        // current one (the field persists whatever was last shown).
         let d = UserDefaults.standard
-        if !d.bool(forKey: "fakturoidAmountRate129") {
-            if d.object(forKey: "fakturoidAmount") as? Double == FakturoidConfig.legacyAmount {
+        if !d.bool(forKey: "fakturoidAmount92720") {
+            if let stored = d.object(forKey: "fakturoidAmount") as? Double,
+               FakturoidConfig.supersededAmounts.contains(stored) {
                 d.removeObject(forKey: "fakturoidAmount")
             }
-            d.set(true, forKey: "fakturoidAmountRate129")
+            d.set(true, forKey: "fakturoidAmount92720")
         }
         _year = State(initialValue: y)
         _month = State(initialValue: m)
@@ -132,7 +133,7 @@ struct FakturoidView: View {
         .padding(16)
     }
 
-    // "92718.75 + paušál 2670 + vícepráce 30000" — shown next to the total and in the
+    // "92720 + paušál 2670 + vícepráce 30000" — shown next to the total and in the
     // confirm dialog whenever anything is added on top of the base amount.
     private var breakdown: String {
         var parts = [formatHours(amount)]

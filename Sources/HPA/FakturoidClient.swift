@@ -12,9 +12,10 @@ enum FakturoidConfig {
     static let contractDate = "01.01.2026"                // hardcoded for now
     static let dueDays = 30
     // Monthly fee: the original 92 000 CZK for 128 h, scaled to the 129 h
-    // contracted since September 2026 (= 92 718,75 CZK).
-    static let legacyAmount: Double = 92000
-    static let defaultAmount: Double = legacyAmount / 128 * 129
+    // contracted since September 2026 (92 718,75) and rounded up to 92 720.
+    static let defaultAmount: Double = 92720
+    // Earlier defaults a stored amount may still hold (see FakturoidView.init).
+    static let supersededAmounts: [Double] = [92000, 92718.75]
     static let defaultBonus: Double = 30000
 
     // Name of the optional extra-work invoice line.
