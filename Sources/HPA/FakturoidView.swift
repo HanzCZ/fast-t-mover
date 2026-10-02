@@ -157,7 +157,7 @@ struct FakturoidView: View {
                 .font(.caption).foregroundStyle(.secondary)
             lineBox(FakturoidConfig.lineText(month: month, year: year, pausal: pausal))
             if bonus != 0 {
-                lineBox("\(FakturoidConfig.bonusLineText(month: month, year: year)) — \(formatHours(bonus)) CZK")
+                lineBox("\(FakturoidConfig.bonusLineText) — \(formatHours(bonus)) CZK")
             }
 
             if let inv = invoice {

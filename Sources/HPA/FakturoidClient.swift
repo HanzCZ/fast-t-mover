@@ -19,9 +19,7 @@ enum FakturoidConfig {
     static let defaultBonus: Double = 30000
 
     // Name of the optional extra-work invoice line.
-    static func bonusLineText(month: Int, year: Int) -> String {
-        "Vícepráce za období: \(CzCal.monthName(month)) \(year)"
-    }
+    static let bonusLineText = "Vícepráce"
 
     static func lineText(month: Int, year: Int, pausal: Double = 0) -> String {
         let base = "na základě uzavřené Rámcové smlouvy o poskytování služeb ze dne \(contractDate) "
@@ -186,7 +184,7 @@ enum FakturoidClient {
         // Bonus is billed as its own line, not folded into the main one.
         if bonus != 0 {
             lines.append([
-                "name": FakturoidConfig.bonusLineText(month: month, year: year),
+                "name": FakturoidConfig.bonusLineText,
                 "quantity": 1,
                 "unit_price": bonus,
                 "vat_rate": 0,
