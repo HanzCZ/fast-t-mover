@@ -234,7 +234,8 @@ struct SettingsView: View {
                         .frame(width: 80)
                         .multilineTextAlignment(.trailing)
                 }
-                Text("Když součet hodin OL nebo DL není roven této hodnotě, je v okně listů zvýrazněn červeně.")
+                Text("Když součet hodin OL nebo DL není roven této hodnotě, je v okně listů zvýrazněn červeně. "
+                     + "Platí od září 2026; starší měsíce se kontrolují proti \(formatHours(ListyTarget.legacyHours)) h.")
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
                 SectionHeader(icon: "doc.text.fill", tint: .indigo, title: "Listy (OL/DL)")

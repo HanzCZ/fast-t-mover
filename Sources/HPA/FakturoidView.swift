@@ -8,7 +8,7 @@ struct FakturoidView: View {
     // the typical recurring paušál survives app restarts; user can zero it
     // out anytime via the "Vynulovat" button.
     @AppStorage("fakturoidPausal") private var pausal: Double = 0
-    // One-off bonus billed as its own invoice line. Deliberately not persisted
+    // One-off extra work (vícepráce) billed as its own invoice line. Deliberately not persisted
     // (unlike paušál) so it never sneaks onto next month's invoice.
     @State private var bonus: Double = 0
     @State private var year: Int
@@ -26,6 +26,15 @@ struct FakturoidView: View {
         let c = cal.dateComponents([.year, .month], from: Date())
         var y = c.year ?? 2026, m = c.month ?? 1
         if m == 1 { m = 12; y -= 1 } else { m -= 1 }
+        // One-time: a stored amount equal to the old 128 h default moves to the
+        // new 129 h default (the field persists whatever was last shown).
+        let d = UserDefaults.standard
+        if !d.bool(forKey: "fakturoidAmountRate129") {
+            if d.object(forKey: "fakturoidAmount") as? Double == FakturoidConfig.legacyAmount {
+                d.removeObject(forKey: "fakturoidAmount")
+            }
+            d.set(true, forKey: "fakturoidAmountRate129")
+        }
         _year = State(initialValue: y)
         _month = State(initialValue: m)
     }
@@ -85,12 +94,12 @@ struct FakturoidView: View {
                 }
             }
             HStack {
-                Text("Bonus").frame(width: 90, alignment: .leading)
+                Text("Vícepráce").frame(width: 90, alignment: .leading)
                 TextField("0", value: $bonus, format: .number)
                     .textFieldStyle(.roundedBorder).frame(width: 100)
                     .multilineTextAlignment(.trailing)
                 Text("CZK").foregroundStyle(.secondary)
-                Button("Více práce (\(formatHours(FakturoidConfig.defaultBonus)))") {
+                Button("\(formatHours(FakturoidConfig.defaultBonus)) Kč") {
                     bonus = FakturoidConfig.defaultBonus
                 }
                 .buttonStyle(.bordered).controlSize(.small)
@@ -123,12 +132,12 @@ struct FakturoidView: View {
         .padding(16)
     }
 
-    // "92000 + paušál 2670 + bonus 30000" — shown next to the total and in the
+    // "92718.75 + paušál 2670 + vícepráce 30000" — shown next to the total and in the
     // confirm dialog whenever anything is added on top of the base amount.
     private var breakdown: String {
         var parts = [formatHours(amount)]
         if pausal != 0 { parts.append("paušál \(formatHours(pausal))") }
-        if bonus != 0 { parts.append("bonus \(formatHours(bonus))") }
+        if bonus != 0 { parts.append("vícepráce \(formatHours(bonus))") }
         return parts.joined(separator: " + ")
     }
 
@@ -147,7 +156,7 @@ struct FakturoidView: View {
                 .font(.caption).foregroundStyle(.secondary)
             lineBox(FakturoidConfig.lineText(month: month, year: year, pausal: pausal))
             if bonus != 0 {
-                lineBox("\(FakturoidConfig.bonusLineText) — \(formatHours(bonus)) CZK")
+                lineBox("\(FakturoidConfig.bonusLineText(month: month, year: year)) — \(formatHours(bonus)) CZK")
             }
 
             if let inv = invoice {

@@ -11,9 +11,16 @@ enum FakturoidConfig {
     static let clientName = "Střední škola gastronomická a hotelová s.r.o."
     static let contractDate = "01.01.2026"                // hardcoded for now
     static let dueDays = 30
-    static let defaultAmount: Double = 92000
+    // Monthly fee: the original 92 000 CZK for 128 h, scaled to the 129 h
+    // contracted since September 2026 (= 92 718,75 CZK).
+    static let legacyAmount: Double = 92000
+    static let defaultAmount: Double = legacyAmount / 128 * 129
     static let defaultBonus: Double = 30000
-    static let bonusLineText = "Bonus – více práce"
+
+    // Name of the optional extra-work invoice line.
+    static func bonusLineText(month: Int, year: Int) -> String {
+        "Vícepráce za období: \(CzCal.monthName(month)) \(year)"
+    }
 
     static func lineText(month: Int, year: Int, pausal: Double = 0) -> String {
         let base = "na základě uzavřené Rámcové smlouvy o poskytování služeb ze dne \(contractDate) "
@@ -178,7 +185,7 @@ enum FakturoidClient {
         // Bonus is billed as its own line, not folded into the main one.
         if bonus != 0 {
             lines.append([
-                "name": FakturoidConfig.bonusLineText,
+                "name": FakturoidConfig.bonusLineText(month: month, year: year),
                 "quantity": 1,
                 "unit_price": bonus,
                 "vat_rate": 0,

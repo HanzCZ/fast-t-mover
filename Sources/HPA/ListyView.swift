@@ -221,11 +221,12 @@ struct MonthEditorView: View {
 
     private var footer: some View {
         let total = month.doc(kind).totalHours
-        let off = total != targetHours
+        let target = ListyTarget.hours(for: month, current: targetHours)
+        let off = total != target
         return HStack {
             Text("Celkem: ").foregroundColor(.secondary)
                 + Text(formatHours(total)).bold().foregroundColor(off ? .red : .primary)
-                + Text(" / \(formatHours(targetHours)) hodin").foregroundColor(.secondary)
+                + Text(" / \(formatHours(target)) hodin").foregroundColor(.secondary)
             if off {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red).font(.caption)

@@ -89,9 +89,25 @@ enum CzCal {
     }
 }
 
-// Format hours without a trailing ".0" (whole numbers are the common case).
+// Format hours (and CZK amounts) without a trailing ".0" — whole numbers are
+// the common case; otherwise up to two decimals ("92718.75", "0.5").
 func formatHours(_ h: Double?) -> String {
     guard let h else { return "" }
     if h == h.rounded() { return String(Int(h)) }
-    return String(format: "%g", h)
+    var s = String(format: "%.2f", h)
+    if s.hasSuffix("0") { s.removeLast() }
+    return s
+}
+
+// Monthly hour target the OL/DL total is checked against. The contract went
+// from 128 to 129 hours starting September 2026; earlier months keep 128 so
+// their (correct) totals aren't flagged. The Settings value applies from the
+// change onwards.
+enum ListyTarget {
+    static let legacyHours: Double = 128
+    static let currentFromYM = 2026_09
+
+    static func hours(for month: MonthEntry, current: Double) -> Double {
+        month.ym < currentFromYM ? legacyHours : current
+    }
 }
