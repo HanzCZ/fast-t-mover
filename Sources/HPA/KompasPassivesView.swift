@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-// Shared confirmation alert (used by both Asana generators).
+// Shared confirmation alert (used by the Kompas generators and Fakturoid).
 @MainActor
-func asanaConfirm(title: String, text: String) -> Bool {
+func confirmCreate(title: String, text: String) -> Bool {
     let a = NSAlert()
     a.messageText = title
     a.informativeText = text
@@ -16,22 +16,22 @@ func asanaConfirm(title: String, text: String) -> Bool {
 
 // Which generator tab is showing. Held outside the view so the menu can open
 // the window straight onto a specific tab.
-final class AsanaUIState: ObservableObject {
-    static let shared = AsanaUIState()
+final class KompasUIState: ObservableObject {
+    static let shared = KompasUIState()
     enum Mode: String, CaseIterable { case blockers, passives }
     @Published var mode: Mode = .blockers
     private init() {}
 }
 
-// Root Asana window: shared mode switch between the two generators.
-struct AsanaView: View {
-    @ObservedObject private var ui = AsanaUIState.shared
+// Root Kompas window: shared mode switch between the two generators.
+struct KompasView: View {
+    @ObservedObject private var ui = KompasUIState.shared
 
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $ui.mode) {
-                Text("Helpdesk blockery").tag(AsanaUIState.Mode.blockers)
-                Text("Sprint Passives").tag(AsanaUIState.Mode.passives)
+                Text("Helpdesk blockery").tag(KompasUIState.Mode.blockers)
+                Text("Sprint Passives").tag(KompasUIState.Mode.passives)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -42,16 +42,16 @@ struct AsanaView: View {
             Divider()
 
             switch ui.mode {
-            case .blockers: AsanaBlockersView()
-            case .passives: AsanaPassivesView()
+            case .blockers: KompasBlockersView()
+            case .passives: KompasPassivesView()
             }
         }
         .frame(minWidth: 600, minHeight: 560)
     }
 }
 
-struct AsanaPassivesView: View {
-    @ObservedObject var settings = AsanaBlockerSettings.shared
+struct KompasPassivesView: View {
+    @ObservedObject var settings = KompasTaskSettings.shared
     @State private var running = false
     @State private var log: [String] = []
 
@@ -67,33 +67,27 @@ struct AsanaPassivesView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sprint Passives → AL x SSGH v2").font(.title2).bold()
-            Text("Založí jeden task „Sprint Passives“ pro vybraný sprint s pevnými parametry "
-                 + "(Dev Status Todo, Projekt Reoccurring, bez assignee a termínu).")
+            Text("Sprint Passives → Kompas").font(.title2).bold()
+            Text("Založí jeden task „Sprint Passives“ do projektu AL x SSGH v2 pro vybraný sprint "
+                 + "s pevnými parametry (sloupec Todo, bez assignee a termínu).")
                 .font(.callout).foregroundStyle(.secondary)
-            HStack(spacing: 14) {
-                Link(destination: AsanaConfig.alSSGHURL) {
-                    Label("AL x SSGH v2", systemImage: "arrow.up.right.square")
-                }
-                Link(destination: AsanaConfig.jhTasksURL) {
-                    Label("JH Tasks (debug)", systemImage: "arrow.up.right.square")
-                }
+            Link(destination: KompasConfig.webURL) {
+                Label("kompas.ssgh.cz", systemImage: "arrow.up.right.square")
             }
             .font(.callout)
 
             HStack {
-                Text("AL SPRINT").frame(width: 130, alignment: .leading)
-                Picker("", selection: $settings.sprintGID) {
-                    ForEach(AsanaConfig.sprintOptions) { o in Text(o.label).tag(o.gid) }
+                Text("Sprint").frame(width: 130, alignment: .leading)
+                Picker("", selection: $settings.sprintID) {
+                    ForEach(KompasConfig.sprintOptions()) { o in Text(o.label).tag(o.id) }
                 }
                 .labelsHidden().frame(maxWidth: 240)
             }
-            infoRow("Dev Status", "Todo")
-            infoRow("Projekt", "Reoccurring")
+            infoRow("Sloupec", "Todo")
             infoRow("Assignee / Due", "— žádné —")
 
-            if !AsanaClient.hasToken {
-                Label("Chybí Asana token v ~/.config/hpa/asana_token.",
+            if !KompasClient.hasToken {
+                Label("Chybí Kompas API token (Settings → Kompas — připojení).",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundStyle(.orange)
             }
@@ -124,7 +118,7 @@ struct AsanaPassivesView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Popis").font(.caption).foregroundStyle(.secondary)
-                Text(AsanaConfig.Passives.description)
+                Text(KompasConfig.Passives.description)
                     .font(.callout).foregroundStyle(.secondary)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,21 +145,21 @@ struct AsanaPassivesView: View {
     private var footer: some View {
         HStack {
             Text("Sprint: ").foregroundColor(.secondary)
-                + Text(AsanaConfig.sprintLabel(settings.sprintGID)).bold()
+                + Text(KompasConfig.sprintLabel(settings.sprintID)).bold()
             Spacer()
             if running { ProgressView().controlSize(.small).padding(.trailing, 6) }
             Button { Task { await create(debug: true) } } label: {
                 Label("Debug run", systemImage: "ladybug")
             }
             .controlSize(.large).tint(.orange)
-            .disabled(running || !AsanaClient.hasToken)
-            .help("Založí Sprint Passives do JH Tasks (na tebe), s kompatibilní podmnožinou polí — bezpečný test.")
+            .disabled(running || !KompasClient.hasToken)
+            .help("Založí Sprint Passives do JH Tasks (na tebe) — bezpečný test.")
 
             Button { Task { await create(debug: false) } } label: {
                 Label("Vytvořit Sprint Passives", systemImage: "paperplane.fill")
             }
             .controlSize(.large).keyboardShortcut(.defaultAction)
-            .disabled(running || !AsanaClient.hasToken)
+            .disabled(running || !KompasClient.hasToken)
         }
         .padding(16)
     }
@@ -173,66 +167,50 @@ struct AsanaPassivesView: View {
     @MainActor
     private func create(debug: Bool) async {
         running = true
-        let sprint = settings.sprintGID
-        let project = debug ? AsanaConfig.debugProjectGID : AsanaConfig.Passives.projectGID
+        defer { running = false }
+        let sprint = settings.sprintID
+        let sprintLabel = KompasConfig.sprintLabel(sprint)
+        let project = debug ? KompasConfig.debugProject : KompasConfig.passivesProject
         let projectLabel = debug ? "JH Tasks (debug)" : "AL x SSGH v2"
 
-        log = ["• Kontroluji existující Sprint Passives v \(AsanaConfig.sprintLabel(sprint))…"]
+        log = ["• Kontroluji existující Sprint Passives v \(sprintLabel)…"]
         do {
-            let existing = try await AsanaClient.existingTasks(
-                projectGID: project, sprintOptionGID: sprint,
-                namePrefix: AsanaConfig.Passives.taskName)
+            let existing = try await KompasClient.existingTasks(
+                project: project, sprintID: sprint,
+                namePrefix: KompasConfig.Passives.taskName)
             if !existing.isEmpty {
-                let proceed = asanaConfirm(
+                let proceed = confirmCreate(
                     title: "Sprint Passives už existuje",
-                    text: "V projektu \(projectLabel) už pro \(AsanaConfig.sprintLabel(sprint)) "
+                    text: "V projektu \(projectLabel) už pro \(sprintLabel) "
                         + "existuje \(existing.count)× „Sprint Passives“.\n\nVytvořit další?")
-                if !proceed { log.append("Zrušeno — duplicitní sprint."); running = false; return }
+                if !proceed { log.append("Zrušeno — duplicitní sprint."); return }
             }
         } catch {
             log.append("⚠︎ Kontrolu duplicit nešlo provést (\(error.localizedDescription)) — pokračuji.")
         }
 
-        // Real run sets the full AL x SSGH v2 field set; debug sets only the
-        // fields JH Tasks has (Dev Status, AL SPRINT, Estimate original).
-        let fields: [String: Any]
-        if debug {
-            fields = [
-                AsanaConfig.Passives.devStatusFieldGID: AsanaConfig.Passives.devStatusTodoGID,
-                AsanaConfig.sprintFieldGID: sprint,
-                AsanaConfig.Passives.debugEstimateOriginalFieldGID: settings.passivesEstimate,
-            ]
-        } else {
-            fields = [
-                AsanaConfig.Passives.devStatusFieldGID: AsanaConfig.Passives.devStatusTodoGID,
-                AsanaConfig.Passives.projektFieldGID: [AsanaConfig.Passives.projektReoccurringGID],
-                AsanaConfig.Passives.estimateFieldGID: settings.passivesEstimate,
-                AsanaConfig.Passives.estimateUpdatedFieldGID: settings.passivesEstimateUpdated,
-                AsanaConfig.sprintFieldGID: sprint,
-            ]
-        }
-
-        let task = AsanaClient.NewTask(
-            name: AsanaConfig.Passives.taskName,
-            assigneeGID: debug ? AsanaConfig.janHanakGID : nil,
-            projectGID: project,
-            dueOn: nil,
-            notes: AsanaConfig.Passives.description,
-            customFields: fields
+        let task = KompasClient.NewTask(
+            name: KompasConfig.Passives.taskName,
+            assignee: debug ? KompasConfig.debugAssignee : nil,
+            project: project,
+            stageID: try? await KompasClient.todoStageID(project: project),
+            sprintID: sprint,
+            notes: KompasConfig.Passives.description,
+            estimateOriginal: settings.passivesEstimate,
+            estimateUpdated: settings.passivesEstimateUpdated
         )
         do {
-            _ = try await AsanaClient.createTask(task)
+            try await KompasClient.createTask(task)
             settings.recordPassivesCreated(debug: debug)
-            log.append("✓ Sprint Passives → \(projectLabel) (\(AsanaConfig.sprintLabel(sprint)))")
+            log.append("✓ Sprint Passives → \(projectLabel) (\(sprintLabel))")
             NotificationManager.shared.post(
-                title: "HPA — Asana",
-                body: "Sprint Passives vytvořen — \(debug ? "JH Tasks (debug)" : AsanaConfig.sprintLabel(sprint)).",
+                title: "HPA — Kompas",
+                body: "Sprint Passives vytvořen — \(debug ? "JH Tasks (debug)" : sprintLabel).",
                 kind: .success)
         } catch {
             log.append("✗ \(error.localizedDescription)")
             NotificationManager.shared.post(
-                title: "HPA — Asana", body: "Sprint Passives selhal. Viz okno.", kind: .failure)
+                title: "HPA — Kompas", body: "Sprint Passives selhal. Viz okno.", kind: .failure)
         }
-        running = false
     }
 }

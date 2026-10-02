@@ -12,6 +12,8 @@ enum FakturoidConfig {
     static let contractDate = "01.01.2026"                // hardcoded for now
     static let dueDays = 30
     static let defaultAmount: Double = 92000
+    static let defaultBonus: Double = 30000
+    static let bonusLineText = "Bonus – více práce"
 
     static func lineText(month: Int, year: Int, pausal: Double = 0) -> String {
         let base = "na základě uzavřené Rámcové smlouvy o poskytování služeb ze dne \(contractDate) "
@@ -163,9 +165,25 @@ enum FakturoidClient {
         return nil
     }
 
-    static func createInvoice(year: Int, month: Int, amount: Double, pausal: Double = 0) async throws -> Invoice {
+    static func createInvoice(year: Int, month: Int, amount: Double, pausal: Double = 0,
+                              bonus: Double = 0) async throws -> Invoice {
         let t = try await token()
         let day = lastDay(year: year, month: month)
+        var lines: [[String: Any]] = [[
+            "name": FakturoidConfig.lineText(month: month, year: year, pausal: pausal),
+            "quantity": 1,
+            "unit_price": amount,
+            "vat_rate": 0,
+        ]]
+        // Bonus is billed as its own line, not folded into the main one.
+        if bonus != 0 {
+            lines.append([
+                "name": FakturoidConfig.bonusLineText,
+                "quantity": 1,
+                "unit_price": bonus,
+                "vat_rate": 0,
+            ])
+        }
         let payload: [String: Any] = [
             "subject_id": FakturoidConfig.subjectID,
             "issued_on": day,
@@ -173,12 +191,7 @@ enum FakturoidClient {
             "due": FakturoidConfig.dueDays,
             "currency": "CZK",
             "payment_method": "bank",
-            "lines": [[
-                "name": FakturoidConfig.lineText(month: month, year: year, pausal: pausal),
-                "quantity": 1,
-                "unit_price": amount,
-                "vat_rate": 0,
-            ]],
+            "lines": lines,
         ]
         let body = try JSONSerialization.data(withJSONObject: payload)
         let url = "\(FakturoidConfig.base)/accounts/\(FakturoidConfig.slug)/invoices.json"

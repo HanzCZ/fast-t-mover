@@ -87,7 +87,7 @@ struct MonthEditorView: View {
     let monthID: UUID
     @State private var kind: DocKind = .ol
     @State private var mailing = false
-    @AppStorage("listyTargetHours") private var targetHours: Double = 128
+    @AppStorage("listyTargetHours") private var targetHours: Double = 129
 
     private var month: MonthEntry { store.month(monthID) ?? MonthEntry(year: 0, month: 0) }
 

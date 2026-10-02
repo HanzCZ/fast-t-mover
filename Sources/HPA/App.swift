@@ -45,11 +45,11 @@ struct MenuContents: View {
             ListyWindowController.shared.show()
         }
         Divider()
-        Button("Asana — generator Helpdesk Blockers…") {
-            AsanaWindowController.shared.show(mode: .blockers)
+        Button("Kompas — generator Helpdesk Blockers…") {
+            KompasWindowController.shared.show(mode: .blockers)
         }
-        Button("Asana — generator Sprint Passives…") {
-            AsanaWindowController.shared.show(mode: .passives)
+        Button("Kompas — generator Sprint Passives…") {
+            KompasWindowController.shared.show(mode: .passives)
         }
         Divider()
         Button("Fakturoid — faktury…") {

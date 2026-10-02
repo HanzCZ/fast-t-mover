@@ -12,16 +12,19 @@ struct SettingsView: View {
     @AppStorage("maxAgeDays")   private var maxAgeDays: Int = 0
     @AppStorage("autoRunEnabled") private var autoRunEnabled = false
     @AppStorage("showInDock")   private var showInDock = false
-    @AppStorage("listyTargetHours") private var listyTargetHours: Double = 128
+    @AppStorage("listyTargetHours") private var listyTargetHours: Double = 129
 
     @State private var statusMessage = ""
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var verifyLines: [String] = []
     @State private var verifying = false
     @State private var stats = Stats.load()
-    @ObservedObject private var asana = AsanaBlockerSettings.shared
-    @State private var asanaToken = ""
-    @State private var asanaConnStatus = ""
+    @ObservedObject private var kompas = KompasTaskSettings.shared
+    @State private var kompasToken = ""
+    @State private var kompasConnStatus = ""
+    @AppStorage(KompasConfig.blockersProjectKey) private var kompasBlockersProject = ""
+    @AppStorage(KompasConfig.passivesProjectKey) private var kompasPassivesProject = ""
+    @AppStorage(KompasConfig.debugProjectKey) private var kompasDebugProject = ""
     @AppStorage("fakturoidAmount") private var fakturoidAmount: Double = FakturoidConfig.defaultAmount
     @State private var fakturoidID = ""
     @State private var fakturoidSecret = ""
@@ -239,67 +242,82 @@ struct SettingsView: View {
 
             Section {
                 LabeledField("Token") {
-                    SecureField("vlož Asana Personal Access Token", text: $asanaToken)
+                    SecureField("vlož Kompas API token (s povoleným zápisem)", text: $kompasToken)
                         .textFieldStyle(.roundedBorder)
                 }
                 HStack {
                     Button("Uložit token") {
-                        AsanaClient.saveToken(asanaToken)
-                        asanaToken = ""
-                        testAsana()
+                        KompasClient.saveToken(kompasToken)
+                        kompasToken = ""
+                        testKompas()
                     }
-                    .disabled(asanaToken.trimmingCharacters(in: .whitespaces).isEmpty)
-                    Button("Test spojení") { testAsana() }
-                        .disabled(!AsanaClient.hasToken)
+                    .disabled(kompasToken.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Test spojení") { testKompas() }
+                        .disabled(!KompasClient.hasToken)
                     Button("Smazat") {
-                        AsanaClient.clearToken()
-                        asanaConnStatus = "Token smazán."
+                        KompasClient.clearToken()
+                        kompasConnStatus = "Token smazán."
                     }
-                    .disabled(!AsanaClient.hasToken)
+                    .disabled(!KompasClient.hasToken)
                     Spacer()
                 }
-                Text(asanaConnStatus.isEmpty
-                     ? (AsanaClient.hasToken ? "Token uložen v Keychainu." : "Token nenastaven — Asana funkce nepojedou.")
-                     : asanaConnStatus)
+                Text(kompasConnStatus.isEmpty
+                     ? (KompasClient.hasToken ? "Token uložen v Keychainu." : "Token nenastaven — Kompas funkce nepojedou.")
+                     : kompasConnStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledField("Projekt blockerů") {
+                    TextField(KompasConfig.defaultBlockersProject, text: $kompasBlockersProject)
+                        .textFieldStyle(.roundedBorder)
+                }
+                LabeledField("Projekt passives") {
+                    TextField(KompasConfig.defaultPassivesProject, text: $kompasPassivesProject)
+                        .textFieldStyle(.roundedBorder)
+                }
+                LabeledField("Projekt pro debug") {
+                    TextField(KompasConfig.defaultDebugProject, text: $kompasDebugProject)
+                        .textFieldStyle(.roundedBorder)
+                }
+                Text("Token: Kompas → Administrace → Nastavení → Integrace a import → API tokeny (zaškrtni „povolit zápis“). "
+                     + "Projekt: Kompas GID z Nastavení projektu → Time Tracker API, nebo původní Asana gid; prázdné = výchozí.")
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
-                SectionHeader(icon: "key.fill", tint: .orange, title: "Asana — připojení")
+                SectionHeader(icon: "key.fill", tint: .orange, title: "Kompas — připojení")
             }
 
             Section {
-                ForEach(AsanaConfig.roster) { p in
+                ForEach(KompasConfig.roster) { p in
                     LabeledField("\(p.initials) — \(p.name)") {
                         TextField("h", value: Binding(
-                            get: { asana.estimate(for: p) },
-                            set: { asana.setEstimate($0, for: p) }
+                            get: { kompas.estimate(for: p) },
+                            set: { kompas.setEstimate($0, for: p) }
                         ), format: .number)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 80)
                         .multilineTextAlignment(.trailing)
                     }
                 }
-                Text("Výchozí odhady (h) předvyplněné v okně „Asana — helpdesk blockery“. Tam je můžeš ještě upravit per sprint.")
+                Text("Výchozí odhady (h) předvyplněné v okně „Kompas — helpdesk blockery“. Tam je můžeš ještě upravit per sprint.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
-                SectionHeader(icon: "number.square.fill", tint: .green, title: "Asana — výchozí odhady")
+                SectionHeader(icon: "number.square.fill", tint: .green, title: "Kompas — výchozí odhady")
             }
 
             Section {
                 LabeledField("Helpdesk blockery (ostré)") {
-                    Text("\(asana.realCreated)").font(.body.monospacedDigit()).bold()
+                    Text("\(kompas.realCreated)").font(.body.monospacedDigit()).bold()
                 }
                 LabeledField("Helpdesk blockery (debug)") {
-                    Text("\(asana.debugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(kompas.debugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 LabeledField("Sprint Passives (ostré)") {
-                    Text("\(asana.passivesCreated)").font(.body.monospacedDigit()).bold()
+                    Text("\(kompas.passivesCreated)").font(.body.monospacedDigit()).bold()
                 }
                 LabeledField("Sprint Passives (debug)") {
-                    Text("\(asana.passivesDebugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(kompas.passivesDebugCreated)").font(.body.monospacedDigit()).foregroundStyle(.secondary)
                 }
             } header: {
-                SectionHeader(icon: "chart.bar.fill", tint: .mint, title: "Asana — vygenerované položky")
+                SectionHeader(icon: "chart.bar.fill", tint: .mint, title: "Kompas — vygenerované položky")
             }
 
             Section {
@@ -461,14 +479,14 @@ struct SettingsView: View {
         }
     }
 
-    private func testAsana() {
-        asanaConnStatus = "Ověřuji…"
+    private func testKompas() {
+        kompasConnStatus = "Ověřuji…"
         Task {
-            let result = await AsanaClient.testConnection()
+            let result = await KompasClient.testConnection()
             await MainActor.run {
                 switch result {
-                case .success(let who): asanaConnStatus = "Připojeno jako \(who)."
-                case .failure(let e):   asanaConnStatus = "Chyba: \(e.localizedDescription)"
+                case .success(let msg): kompasConnStatus = msg
+                case .failure(let e):   kompasConnStatus = "Chyba: \(e.localizedDescription)"
                 }
             }
         }

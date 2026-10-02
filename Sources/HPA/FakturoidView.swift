@@ -8,6 +8,9 @@ struct FakturoidView: View {
     // the typical recurring paušál survives app restarts; user can zero it
     // out anytime via the "Vynulovat" button.
     @AppStorage("fakturoidPausal") private var pausal: Double = 0
+    // One-off bonus billed as its own invoice line. Deliberately not persisted
+    // (unlike paušál) so it never sneaks onto next month's invoice.
+    @State private var bonus: Double = 0
     @State private var year: Int
     @State private var month: Int
     @State private var invoice: FakturoidClient.Invoice?
@@ -15,7 +18,7 @@ struct FakturoidView: View {
     @State private var log: [String] = []
 
     // Total that actually gets sent to Fakturoid / shown in the confirm dialog.
-    private var totalAmount: Double { amount + pausal }
+    private var totalAmount: Double { amount + pausal + bonus }
 
     init() {
         // Default to the previous month (the period you'd normally invoice).
@@ -82,11 +85,26 @@ struct FakturoidView: View {
                 }
             }
             HStack {
+                Text("Bonus").frame(width: 90, alignment: .leading)
+                TextField("0", value: $bonus, format: .number)
+                    .textFieldStyle(.roundedBorder).frame(width: 100)
+                    .multilineTextAlignment(.trailing)
+                Text("CZK").foregroundStyle(.secondary)
+                Button("Více práce (\(formatHours(FakturoidConfig.defaultBonus)))") {
+                    bonus = FakturoidConfig.defaultBonus
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                if bonus != 0 {
+                    Button("Vynulovat") { bonus = 0 }
+                        .buttonStyle(.borderless).controlSize(.small)
+                }
+            }
+            HStack {
                 Text("Celkem").frame(width: 90, alignment: .leading)
                 Text(formatHours(totalAmount)).bold()
                 Text("CZK").foregroundStyle(.secondary)
-                if pausal != 0 {
-                    Text("(\(formatHours(amount)) + paušál \(formatHours(pausal)))")
+                if pausal != 0 || bonus != 0 {
+                    Text("(\(breakdown))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -105,15 +123,32 @@ struct FakturoidView: View {
         .padding(16)
     }
 
+    // "92000 + paušál 2670 + bonus 30000" — shown next to the total and in the
+    // confirm dialog whenever anything is added on top of the base amount.
+    private var breakdown: String {
+        var parts = [formatHours(amount)]
+        if pausal != 0 { parts.append("paušál \(formatHours(pausal))") }
+        if bonus != 0 { parts.append("bonus \(formatHours(bonus))") }
+        return parts.joined(separator: " + ")
+    }
+
+    private func lineBox(_ text: String) -> some View {
+        Text(text)
+            .font(.callout)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
     private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Text položky").font(.caption).foregroundStyle(.secondary)
-            Text(FakturoidConfig.lineText(month: month, year: year, pausal: pausal))
-                .font(.callout)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            Text(bonus != 0 ? "Text položek" : "Text položky")
+                .font(.caption).foregroundStyle(.secondary)
+            lineBox(FakturoidConfig.lineText(month: month, year: year, pausal: pausal))
+            if bonus != 0 {
+                lineBox("\(FakturoidConfig.bonusLineText) — \(formatHours(bonus)) CZK")
+            }
 
             if let inv = invoice {
                 HStack(spacing: 12) {
@@ -194,15 +229,14 @@ struct FakturoidView: View {
                 return
             }
             log.append("• Pro \(periodLabel) faktura neexistuje.")
-            let pausalNote = pausal != 0
-                ? " (částka \(formatHours(amount)) + paušál \(formatHours(pausal)))" : ""
-            let ok = asanaConfirm(
+            let pausalNote = pausal != 0 || bonus != 0 ? " (\(breakdown))" : ""
+            let ok = confirmCreate(
                 title: "Vytvořit fakturu?",
                 text: "Pro \(periodLabel) vytvořit fakturu pro \(FakturoidConfig.clientName) "
                     + "na \(formatHours(totalAmount)) CZK\(pausalNote) "
                     + "(vystaveno \(FakturoidClient.lastDay(year: year, month: month)))?")
             guard ok else { log.append("Zrušeno."); return }
-            let created = try await FakturoidClient.createInvoice(year: year, month: month, amount: totalAmount, pausal: pausal)
+            let created = try await FakturoidClient.createInvoice(year: year, month: month, amount: amount + pausal, pausal: pausal, bonus: bonus)
             invoice = created
             log.append("✓ Vytvořena \(created.number) (\(created.status)).")
             NotificationManager.shared.post(title: "HPA — Fakturoid",

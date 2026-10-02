@@ -1,15 +1,15 @@
 import AppKit
 import SwiftUI
 
-// Manually-managed window for the Asana helpdesk-blocker bulk creator,
+// Manually-managed window for the Kompas task generators,
 // matching the SettingsWindowController / ListyWindowController pattern.
-final class AsanaWindowController: NSWindowController {
-    static let shared = AsanaWindowController()
+final class KompasWindowController: NSWindowController {
+    static let shared = KompasWindowController()
 
     private convenience init() {
-        let hosting = NSHostingController(rootView: AsanaView())
+        let hosting = NSHostingController(rootView: KompasView())
         let window = NSWindow(contentViewController: hosting)
-        window.title = "HPA — Asana"
+        window.title = "HPA — Kompas"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 600, height: 560))
@@ -17,10 +17,10 @@ final class AsanaWindowController: NSWindowController {
         self.init(window: window)
     }
 
-    func show(mode: AsanaUIState.Mode = .blockers) {
-        AsanaUIState.shared.mode = mode
+    func show(mode: KompasUIState.Mode = .blockers) {
+        KompasUIState.shared.mode = mode
         // Re-evaluate the date-based sprint each time the window opens.
-        AsanaBlockerSettings.shared.selectSprintForToday()
+        KompasTaskSettings.shared.selectSprintForToday()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
