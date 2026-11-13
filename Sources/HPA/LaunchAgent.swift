@@ -1,5 +1,8 @@
 import Foundation
 
+// Legacy launchd agent. No longer installed — MoverScheduler runs the mover
+// from inside the app — but still needed to detect and remove an agent left
+// by HPA ≤ 1.4.3.
 enum LaunchAgent {
     static let label = "com.hanak.torrentmover"
     static var plistPath: String {
@@ -16,40 +19,6 @@ enum LaunchAgent {
         do { try task.run() } catch { return false }
         task.waitUntilExit()
         return task.terminationStatus == 0
-    }
-
-    static func install(scriptPath: String) throws {
-        let plist = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>Label</key>
-            <string>\(label)</string>
-            <key>ProgramArguments</key>
-            <array>
-                <string>\(scriptPath)</string>
-            </array>
-            <key>RunAtLoad</key>
-            <true/>
-            <key>StartInterval</key>
-            <integer>900</integer>
-            <key>StandardOutPath</key>
-            <string>\(NSHomeDirectory())/.local/state/fast_t_mover/launchd.out.log</string>
-            <key>StandardErrorPath</key>
-            <string>\(NSHomeDirectory())/.local/state/fast_t_mover/launchd.err.log</string>
-        </dict>
-        </plist>
-        """
-        let dir = "\(NSHomeDirectory())/Library/LaunchAgents"
-        try FileManager.default.createDirectory(
-            atPath: dir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(
-            atPath: "\(NSHomeDirectory())/.local/state/fast_t_mover",
-            withIntermediateDirectories: true)
-        if isLoaded() { _ = launchctl("unload", plistPath) }
-        try plist.write(toFile: plistPath, atomically: true, encoding: .utf8)
-        _ = launchctl("load", plistPath)
     }
 
     static func uninstall() {

@@ -1,6 +1,8 @@
 import Foundation
 
 enum Runner {
+    private static let runLock = NSLock()
+
     /// Path to the bundled worker script (Contents/Resources/move_torrents.sh).
     static var scriptPath: String? {
         Bundle.main.path(forResource: "move_torrents", ofType: "sh")
@@ -14,6 +16,10 @@ enum Runner {
     ///   just because the interval hasn't elapsed.
     @discardableResult
     static func run(debug: Bool = false, force: Bool = false) -> (status: Int32, output: String) {
+        // One run at a time: a manual run must not copy the same files in
+        // parallel with a scheduled one.
+        runLock.lock()
+        defer { runLock.unlock() }
         guard let path = scriptPath else {
             return (-1, "Worker script not found in app bundle.")
         }

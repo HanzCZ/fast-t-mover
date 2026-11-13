@@ -23,7 +23,7 @@ enum NotificationKind: String {
 }
 
 /// Posts macOS notifications under HPA's bundle ID.
-/// Watches a queue file written to by the worker script (so LaunchAgent
+/// Watches a queue file written to by the worker script (so scheduled
 /// runs can deliver notifications even though they don't go through the
 /// menu-bar app's Runner code path).
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {

@@ -7,7 +7,7 @@ on the first allowed-Wi-Fi tick after wake.
 
 ## What it does
 
-1. On a schedule (LaunchAgent ticks every 15 min) or on-demand, scans a source folder.
+1. On a schedule (the running app ticks at launch, on wake and every 15 min) or on-demand, scans a source folder.
 2. Optional Wi-Fi gate: only run when connected to a whitelisted SSID.
 3. Mounts an SMB share via AppleScript (uses macOS Keychain for credentials).
 4. Moves matched files into a destination subfolder on the share.
@@ -76,7 +76,7 @@ killall Dock Finder NotificationCenter usernoted 2>/dev/null
    - File pattern (default `*.torrent`)
    - Allowed Wi-Fi SSIDs (comma-separated; empty = any network)
    - Minimum interval (Once a day / 12h / 4h / 1h / Every wake)
-   - Toggle **Run automatically (≈ on wake)** — installs the LaunchAgent
+   - Toggle **Run automatically (≈ on wake)** — the app runs the mover itself while it is running
 
 ## Use
 
@@ -86,7 +86,7 @@ Click the menu bar item:
 - **Run Now (debug)** — bypass the interval lock, verbose, also matches files
   with the pattern body anywhere in the name (for testing with renamed files).
 - **Test Notification** — post a sample success banner to verify permissions.
-- **Auto-run on wake** — install/remove the LaunchAgent.
+- **Auto-run on wake** — turn the in-app schedule on/off.
 - **Settings…** — full configuration window.
 - **Show Log** — open the log file.
 
@@ -113,8 +113,12 @@ failures when away:
   on any other Wi-Fi. Leave empty once a VPN provides reachability from
   anywhere.
 - **Soft mount failures**: if the SMB mount fails (off-network, VPN down),
-  the script exits 0 without taking the lock. The next launchd tick
+  the script exits 0 without taking the lock. The next tick
   (every 15 min) retries automatically.
+- **Folder access**: the schedule runs inside the app on purpose. A bare
+  launchd job has no macOS privacy grant for `~/Downloads`, so it saw an
+  empty folder and reported "nothing to move". If the source folder can't be
+  listed, the script now says so, exits 1 and does not take the lock.
 - The lock is only taken on success (or when there was nothing to do
   *while on an allowed network*).
 
@@ -127,7 +131,8 @@ Sources/FastTMover/
     SettingsWindow.swift       NSWindowController hosting the settings view
     Config.swift               Writes the config file + SSID helpers
     Runner.swift               Spawns the worker script
-    LaunchAgent.swift          Install/uninstall the LaunchAgent
+    MoverScheduler.swift       In-app schedule (launch / wake / every 15 min)
+    LaunchAgent.swift          Removes the legacy launchd agent (HPA ≤ 1.4.3)
     NotificationManager.swift  UNUserNotificationCenter + queue file watcher
 move_torrents.sh               The worker (bash) — usable standalone too
 tools/generate_icon.swift      Generates the 1024x1024 app icon master PNG

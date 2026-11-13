@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let showInDock = UserDefaults.standard.bool(forKey: "showInDock")
         NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         NotificationManager.shared.setup()
+        MoverScheduler.shared.bootstrap()
 
         // Quietly check GitHub for a newer release; prompts only if one exists.
         let autoCheck = UserDefaults.standard.object(forKey: "autoCheckUpdates") as? Bool ?? true

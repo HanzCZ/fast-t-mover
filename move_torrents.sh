@@ -119,7 +119,7 @@ notify() {
 }
 
 # --- Interval gate ---------------------------------------------------------
-# --debug and --force both bypass this; LaunchAgent runs respect it.
+# --debug and --force both bypass this; scheduled runs respect it.
 NOW_TS="$(date +%s)"
 if [[ ${DEBUG} -eq 0 && ${FORCE} -eq 0 && ${INTERVAL_HOURS} -gt 0 && -f "${LAST_RUN_FILE}" ]]; then
     LAST_TS="$(cat "${LAST_RUN_FILE}" 2>/dev/null || echo '0')"
@@ -180,6 +180,22 @@ fi
 if [[ ! -d "${SOURCE_DIR}" ]]; then
     die "Source directory does not exist: ${SOURCE_DIR}"
 fi
+# The folder can exist and still be unlistable: macOS privacy (TCC) denies
+# Downloads/Desktop/Documents to processes without a grant — notably a bare
+# launchd job — and `find` then just prints nothing. Never report that as
+# "no files" and never take the interval lock on it.
+UNREADABLE_MARK="${STATE_DIR}/source_unreadable"
+if ! list_err="$(ls "${SOURCE_DIR}" 2>&1 >/dev/null)"; then
+    log "ERROR: cannot read ${SOURCE_DIR}: ${list_err}"
+    log "Grant HPA access to the folder (System Settings → Privacy & Security → Files and Folders). Will retry on next tick."
+    # Ticks retry every 15 min — notify once, not on every retry.
+    if [[ ! -f "${UNREADABLE_MARK}" ]]; then
+        notify "failure" "HPA" "Cannot read $(basename "${SOURCE_DIR}") — check folder access in System Settings."
+        touch "${UNREADABLE_MARK}"
+    fi
+    exit 1
+fi
+rm -f "${UNREADABLE_MARK}"
 
 # In debug, also match files with the pattern body in the middle of name,
 # so renamed test files (e.g. demo.torrent.py) get picked up.
@@ -197,7 +213,7 @@ fi
 found_files=()
 while IFS= read -r -d '' f; do
     found_files+=("$f")
-done < <(find "${SOURCE_DIR}" "${find_args[@]}" -print0)
+done < <(find "${SOURCE_DIR}" "${find_args[@]}" -print0 2>>"${LOG_FILE}")
 
 if [[ ${#found_files[@]} -eq 0 ]]; then
     log "No files matching ${find_pattern} in ${SOURCE_DIR}, nothing to do."
@@ -242,7 +258,7 @@ remount_share() {
 
 if ! mount_share; then
     # Soft-fail: most likely off-network or VPN not up. Don't set the daily
-    # lock — next launchd tick will retry.
+    # lock — the next scheduled tick will retry.
     log "Could not mount ${SMB_URL} (off-network / VPN down?). Will retry on next tick."
     exit 0
 fi
@@ -362,7 +378,7 @@ else
     notify "success" "HPA" "Moved ${moved} file(s) to ${DEST_SUBDIR}."
 fi
 # Only take the interval lock on a fully clean run. If anything failed, leave
-# the lock untouched so the next launchd tick retries the leftovers soon
+# the lock untouched so the next scheduled tick retries the leftovers soon
 # instead of waiting the full INTERVAL_HOURS.
 if (( failed == 0 )); then
     echo "${NOW_TS}" > "${LAST_RUN_FILE}"

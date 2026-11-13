@@ -200,7 +200,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                 }
-                Text("LaunchAgent ticks every 15 min; the interval above gates the actual work.")
+                Text("HPA checks at launch, on wake and every 15 min while it is running; the interval above gates the actual work.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
@@ -529,23 +529,13 @@ struct SettingsView: View {
 
     private func applyAutoRun(_ enabled: Bool) {
         saveConfig()
-        if enabled {
-            guard let script = Runner.scriptPath else {
-                statusMessage = "Worker script missing from bundle."
-                autoRunEnabled = false
-                return
-            }
-            do {
-                try LaunchAgent.install(scriptPath: script)
-                statusMessage = "Auto-run enabled."
-            } catch {
-                statusMessage = "Failed to install launch agent: \(error)"
-                autoRunEnabled = false
-            }
-        } else {
-            LaunchAgent.uninstall()
-            statusMessage = "Auto-run disabled."
+        if enabled && Runner.scriptPath == nil {
+            statusMessage = "Worker script missing from bundle."
+            autoRunEnabled = false
+            return
         }
+        MoverScheduler.shared.apply(enabled: enabled)
+        statusMessage = enabled ? "Auto-run enabled." : "Auto-run disabled."
     }
 }
 
